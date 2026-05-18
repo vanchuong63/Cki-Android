@@ -19,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,9 +35,16 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.bluetooth.presentation.components.DeviceScreen
-import com.example.bluetooth.presentation.components.HelpScreen
-import com.example.bluetooth.presentation.components.PaymentScreen
+import com.example.bluetooth.presentation.log.LoginScreen
+import com.example.bluetooth.presentation.log.RegisterScreen
+import com.example.bluetooth.presentation.user.DeviceScreen
+import com.example.bluetooth.presentation.user.HelpScreen
+import com.example.bluetooth.presentation.user.HistoryScreen
+import com.example.bluetooth.presentation.user.PaymentScreen
+import com.example.bluetooth.presentation.user.RewardsScreen
+import com.example.bluetooth.presentation.user.ProfileScreen
+import com.example.bluetooth.presentation.user.UserViewModel
+import com.example.bluetooth.presentation.user.ThankYouScreen
 import com.example.bluetooth.ui.theme.BluetoothTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -55,15 +64,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         setContent {
             BluetoothTheme {
                 val viewModel = hiltViewModel<BluetoothViewModel>()
+                val userViewModel = hiltViewModel<UserViewModel>()
                 val state by viewModel.state.collectAsState()
                 val navController = rememberNavController()
-                
+
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
+
+                // Kiểm tra xem có đang ở màn hình login/register/payment không để ẩn BottomBar
+                val hideBottomBar = currentRoute == "login" || currentRoute == "register" || currentRoute == "payment" || currentRoute == "thank_you"
+                val isGuest = userViewModel.isGuest
 
                 // Launcher để yêu cầu bật Bluetooth
                 val enableBluetoothLauncher = rememberLauncherForActivityResult(
@@ -102,8 +116,7 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     bottomBar = {
-                        if (currentRoute != "payment") {
-                            // Thanh BottomBar hiện đại, bo tròn và nổi (Floating)
+                        if (!hideBottomBar) {
                             Box(
                                 modifier = Modifier
                                     .padding(horizontal = 24.dp, vertical = 24.dp)
@@ -115,9 +128,16 @@ class MainActivity : ComponentActivity() {
                                     containerColor = Color.Transparent,
                                     tonalElevation = 0.dp
                                 ) {
+                                    val itemColors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = Color(0xFF0984E3),
+                                        selectedTextColor = Color(0xFF0984E3),
+                                        indicatorColor = Color(0xFF0984E3).copy(alpha = 0.1f),
+                                        unselectedIconColor = Color.LightGray
+                                    )
+                                    // ── Mua nước ──────────────────────────────
                                     NavigationBarItem(
                                         selected = currentRoute == "selection",
-                                        onClick = { 
+                                        onClick = {
                                             if (currentRoute != "selection") {
                                                 navController.navigate("selection") {
                                                     popUpTo("selection") { inclusive = true }
@@ -126,40 +146,60 @@ class MainActivity : ComponentActivity() {
                                         },
                                         label = { Text("Mua nước", fontSize = 11.sp) },
                                         icon = { Icon(Icons.Default.Home, contentDescription = null) },
-                                        colors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = Color(0xFF0984E3),
-                                            selectedTextColor = Color(0xFF0984E3),
-                                            indicatorColor = Color(0xFF0984E3).copy(alpha = 0.1f),
-                                            unselectedIconColor = Color.LightGray
-                                        )
+                                        colors = itemColors
                                     )
-                                    NavigationBarItem(
-                                        selected = currentRoute == "history",
-                                        onClick = { /* navigate to history */ },
-                                        label = { Text("Lịch sử", fontSize = 11.sp) },
-                                        icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-                                        colors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = Color(0xFF0984E3),
-                                            selectedTextColor = Color(0xFF0984E3),
-                                            indicatorColor = Color(0xFF0984E3).copy(alpha = 0.1f),
-                                            unselectedIconColor = Color.LightGray
+
+                                    if (!isGuest) {
+                                        // ── Lịch sử ───────────────────────────────
+                                        NavigationBarItem(
+                                            selected = currentRoute == "history",
+                                            onClick = {
+                                                if (currentRoute != "history") {
+                                                    navController.navigate("history")
+                                                }
+                                            },
+                                            label = { Text("Lịch sử", fontSize = 11.sp) },
+                                            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+                                            colors = itemColors
                                         )
-                                    )
+
+                                        // ── Phần thưởng ───────────────────────────
+                                        NavigationBarItem(
+                                            selected = currentRoute == "reward",
+                                            onClick = {
+                                                if (currentRoute != "reward") {
+                                                    navController.navigate("reward")
+                                                }
+                                            },
+                                            label = { Text("Thưởng", fontSize = 11.sp) },
+                                            icon = { Icon(Icons.Default.Star, contentDescription = null) },
+                                            colors = itemColors
+                                        )
+
+                                        NavigationBarItem(
+                                            selected = currentRoute == "profile",
+                                            onClick = {
+                                                if (currentRoute != "profile") {
+                                                    navController.navigate("profile")
+                                                }
+                                            },
+                                            label = { Text("Cá nhân", fontSize = 11.sp) },
+                                            icon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                            colors = itemColors
+                                        )
+                                    }
+
+                                    // ── Hỗ trợ ────────────────────────────────
                                     NavigationBarItem(
                                         selected = currentRoute == "help",
-                                        onClick = { 
+                                        onClick = {
                                             if (currentRoute != "help") {
                                                 navController.navigate("help")
                                             }
                                         },
                                         label = { Text("Hỗ trợ", fontSize = 11.sp) },
                                         icon = { Icon(Icons.Default.Info, contentDescription = null) },
-                                        colors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = Color(0xFF0984E3),
-                                            selectedTextColor = Color(0xFF0984E3),
-                                            indicatorColor = Color(0xFF0984E3).copy(alpha = 0.1f),
-                                            unselectedIconColor = Color.LightGray
-                                        )
+                                        colors = itemColors
                                     )
                                 }
                             }
@@ -174,25 +214,62 @@ class MainActivity : ComponentActivity() {
                     ) {
                         NavHost(
                             navController = navController,
-                            startDestination = "selection"
+                            startDestination = "login"
                         ) {
-                            composable("selection") {
-                                DeviceScreen(
-                                    state = state,
-                                    onProductSelect = { productId ->
-                                        viewModel.selectProduct(productId)
-                                        navController.navigate("payment")
+                            composable("login") {
+                                LoginScreen(
+                                    onLoginSuccess = {
+                                        userViewModel.refresh()
+                                        navController.navigate("selection") {
+                                            popUpTo("login") { inclusive = true }
+                                        }
+                                    },
+                                    onNavigateToRegister = { navController.navigate("register") },
+                                    onContinueAsGuest = {
+                                        userViewModel.refresh()
+                                        navController.navigate("selection") {
+                                            popUpTo("login") { inclusive = true }
+                                        }
                                     }
                                 )
                             }
+
+                            composable("register") {
+                                RegisterScreen(
+                                    onRegisterSuccess = { navController.navigate("login") },
+                                    onNavigateToLogin = { navController.navigate("login") }
+                                )
+                            }
+
+                            composable("selection") {
+                                DeviceScreen(
+                                    state = state,
+                                    onProductSelect = { id ->
+                                        viewModel.selectProduct(id)
+                                        navController.navigate("payment")
+                                    },
+                                    onNavigateBack = {
+                                        userViewModel.signOut {
+                                            navController.navigate("login") {
+                                                popUpTo(0)
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+
                             composable("payment") {
                                 PaymentScreen(
                                     state = state,
                                     paymentStatus = viewModel.paymentStatus,
                                     onPaymentDetected = {
                                         viewModel.onPaymentDetected()
-                                        navController.navigate("selection") {
-                                            popUpTo("selection") { inclusive = true }
+
+                                        // refresh lại để cập nhật giao diện
+                                        userViewModel.refresh()
+
+                                        navController.navigate("thank_you") {
+                                            popUpTo("payment") { inclusive = true }
                                         }
                                     },
                                     onBack = {
@@ -200,8 +277,40 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                             }
+
                             composable("help") {
                                 HelpScreen()
+                            }
+
+                            composable("history") {
+                                HistoryScreen()
+                            }
+
+                            composable("reward") {
+                                RewardsScreen()
+                            }
+
+                            composable("profile") {
+                                ProfileScreen(onNavigateToLogin = {
+                                    userViewModel.signOut {
+                                        navController.navigate("login") {
+                                            popUpTo(0)
+                                        }
+                                    }
+                                })
+                            }
+                            composable("thank_you") {
+                                // Bạn có thể truyền tên sản phẩm từ ViewModel nếu muốn, ở đây để mặc định
+                                ThankYouScreen(
+                                    productName = state.selectedProduct?.name ?: "đồ uống",
+                                    onNavigateHome = {
+                                        // Reset lại giao diện user và quay về trang chọn nước
+                                        userViewModel.refresh()
+                                        navController.navigate("selection") {
+                                            popUpTo("selection") { inclusive = true }
+                                        }
+                                    }
+                                )
                             }
                         }
                     }

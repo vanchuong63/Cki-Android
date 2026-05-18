@@ -1,109 +1,190 @@
-#include "BluetoothSerial.h"
-#include <ESP32Servo.h>
+#include <Ultrasonic.h>
 
-BluetoothSerial SerialBT;
+const int trigL = 22;
+const int echoL = 23;
 
-Servo servoCoca;
-Servo servoWater;
+const int trigF = 24;
+const int echoF = 25;
 
-const int pinCoca = 18;  
-const int pinWater = 19;
+const int trigR = 26;
+const int echoR = 27;
 
-const int sensorPin = 4;
+const int in1 = 4;
+const int in2 = 5;
 
-String device_name = "ESP32-Bluetooth";
-bool isProcessing = false;
+const int in3 = 6;
+const int in4 = 7;
 
-int stop = 90;
-int run = 120;
+const int enA = 2;
+const int enB = 3;
 
-void setup() {
-  Serial.begin(115200);
-  pinMode(sensorPin, INPUT_PULLUP); 
+#define PWM 200
+#define DIS 15
+void setup()
+{
+  pinMode(trigL,OUTPUT);
+  pinMode(echoL, INPUT);
 
-  servoCoca.write(stop); 
-  servoWater.write(stop);
+  pinMode(trigF,OUTPUT);
+  pinMode(echoF, INPUT);
 
-  delay(500);
-  // Thiết lập chân cho 2 servo
-  servoCoca.attach(pinCoca, 500, 2400);
-  servoWater.attach(pinWater, 500, 2400);
-  
-  // Đưa cả 2 về vị trí 0 độ (vị trí đóng)
+  pinMode(trigR,OUTPUT);
+  pinMode(echoR, INPUT);
 
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
 
-  if (!SerialBT.begin(device_name)) {
-    Serial.println("Lỗi khởi động Bluetooth!");
-    while (1);
-  }
-  
-  Serial.println("--- MÁY BÁN NƯỚC: HỆ THỐNG SẴN SÀNG ---");
-}
+  pinMode(in3, OUTPUT);
+  pinMode(in4, OUTPUT);
 
-void runUntilDetected(Servo &servo) {
-  servo.write(run);
+  pinMode(enA, OUTPUT);
+  pinMode(enB, OUTPUT);
 
-  unsigned long start = millis();
-
-  while (true) {
-    if (digitalRead(sensorPin) == LOW) {
-      Serial.println("Nước được đẩy xuống thành công");
-      break;
-    }
-
-    if (millis() - start > 5000 ) {
-      Serial.println("Nước đẩy xuống không thành công ");
-    }
-  }
+  Serial.begin(9600);
 }
 
 void loop() {
-  if (SerialBT.available()) {
-    String command = "";
-    while (SerialBT.available()) {
-      char c = SerialBT.read();
-      if (c == '\n') break;
-      command += c;
-    }
-    command.trim();
+  long front = FrontSensor();
+  delay(20);
 
-    if (command.length() > 0 && !isProcessing) {
-      Serial.println("Lệnh nhận được: " + command);
+  long right = RightSensor();
+  delay(20);
 
-      if (command == "COCA") {
-        isProcessing = true;
-        Serial.println("=> Đang nhả COCA...");
-        
-        servoCoca.write(run); // Sử dụng biến run của bạn
-        delay(2000);         
-        servoCoca.write(stop); // Sử dụng biến stop
-        
-        SerialBT.println("STATUS|COMPLETED");
-        // Quan trọng: Xóa sạch dữ liệu thừa còn trong buffer
-        while(SerialBT.available()) SerialBT.read(); 
-        isProcessing = false;
-      } 
-      else if (command == "WATER") {
-        isProcessing = true;
-        Serial.println("=> Đang nhả NƯỚC LỌC...");
-        
-        servoWater.write(run); 
-        delay(2000);
-        servoWater.write(stop);
-        
-        SerialBT.println("STATUS|COMPLETED");
-        while(SerialBT.available()) SerialBT.read();
-        isProcessing = false;   
-      }
-      // Thêm lệnh RESET để app có thể yêu cầu ESP32 về trạng thái chờ
-      else if (command == "RESET") {
-        isProcessing = false;
-        servoCoca.write(stop);
-        servoWater.write(stop);
-      }
-    }
+  long left = LeftSensor();
+  delay(20);
+  if (front() < DIS && right() < DIS && left() < DIS) {
+    turn_right () ;
+    delay(3000);
   }
-  delay(10);
+  else if(front() < DIS && right() < DIS && left() > DIS) {
+    turn_left () ;
+  }
+  else if (front() < DIS && right() > DIS && left() < DIS) {
+    turn_right();
+  }
+  else if (front() < DIS && right() > DIS && left() > DIS) {
+    turn_right();
+  }
+  else if (front() > DIS && right() > DIS && left() < DIS) {
+    turn_right();
 
-  
+    delay(180);
+    forward();
+  }
+  else if (front() > DIS && right() < DIS && left() > DIS) {
+    turn_left();
+
+    delay(180);
+    forward();
+  }
+  else {
+    forward();
+  }
+ 
 }
+
+void forward()
+{
+  digitalWrite(in1,HIGH);
+  digitalWrite(in2,LOW);
+  digitalWrite(in3,HIGH);
+  digitalWrite(in4,LOW);
+  analogWrite(enA, PWM);
+  analogWrite(enB, PWM);
+
+}
+void turn_left() 
+{
+  digitalWrite(in1,LOW);
+  digitalWrite(in2,HIGH);
+  digitalWrite(in3,HIGH);
+  digitalWrite(in4,LOW);
+  analogWrite(enA, PWM);
+  analogWrite(enB, PWM);
+
+}
+void turn_right() 
+{
+  digitalWrite(in1,HIGH);
+  digitalWrite(in2,LOW);
+  digitalWrite(in3,LOW);
+  digitalWrite(in4,HIGH);
+  analogWrite(enA, PWM);
+  analogWrite(enB, PWM);
+}
+void reverse ()
+{
+  digitalWrite(in1,LOW);
+  digitalWrite(in2,HIGH);
+  digitalWrite(in3,LOW);
+  digitalWrite(in4,HIGH);
+  analogWrite(enA, PWM);
+  analogWrite(enB, PWM);
+}
+void stop_motor()
+{
+  digitalWrite(in1,LOW);
+  digitalWrite(in2,LOW);
+  digitalWrite(in3,LOW);
+  digitalWrite(in4,LOW);
+  analogWrite(enA, LOW);
+  analogWrite(enB, LOW);
+}
+long FrontSensor() {
+  long dur;
+
+  digitalWrite(trigF, LOW);
+
+  delayMicroseconds(5);
+
+  digitalWrite(trigF, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(trigF, LOW);
+
+  dur = pulseIn(echoF,HIGH);
+  return (dur/58);
+}
+
+long RightSensor() {
+  long dur;
+  digitalWrite(trigR, LOW);
+
+  delayMicroseconds(5);
+
+  digitalWrite(trigR, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(trigR, LOW);
+
+  dur = pulseIn(echoR,HIGH);
+  return (dur/58);
+}
+
+long LeftSensor() {
+  long dur;
+  digitalWrite(trigL, LOW);
+
+  delayMicroseconds(5);
+
+  digitalWrite(trigL, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(trigL, LOW);
+
+  dur = pulseIn(echoL,HIGH);
+  return (dur/58);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

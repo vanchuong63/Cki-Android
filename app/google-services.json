@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "163760602548",
+    "project_id": "planning-with-ai-ee2a3",
+    "storage_bucket": "planning-with-ai-ee2a3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:163760602548:android:75c86a7ef717eb60ed06e1",
+        "android_client_info": {
+          "package_name": "com.example.bluetooth"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6VW9Zb-AECE0VRURQy3ZFL4Z-yDmr3rE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

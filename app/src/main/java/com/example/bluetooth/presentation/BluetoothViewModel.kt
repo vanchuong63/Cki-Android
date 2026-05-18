@@ -3,11 +3,13 @@ package com.example.bluetooth.presentation
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.bluetooth.data.bluetooth.AndroidBluetoothController
 import com.example.bluetooth.data.remote.SePayApi
 import com.example.bluetooth.domain.controller.BluetoothController
 import com.example.bluetooth.domain.model.BluetoothDeviceDomain
 import com.example.bluetooth.domain.model.ConnectionResult
+import com.example.bluetooth.presentation.user.SampleBeverages
+import com.example.bluetooth.subpabase.SessionManager
+import com.example.bluetooth.subpabase.SupabaseRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -18,11 +20,14 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Inject
+import java.util.Locale
+import java.text.SimpleDateFormat
 
 @HiltViewModel
 class BluetoothViewModel @Inject constructor(
-    private val bluetoothController: BluetoothController
-): ViewModel() {
+    private val bluetoothController: BluetoothController,
+    private val sessionManager: SessionManager
+) : ViewModel() {
 
     private val _state = MutableStateFlow(BluetoothUiState())
     val state = combine(
@@ -30,33 +35,24 @@ class BluetoothViewModel @Inject constructor(
         bluetoothController.pairedDevice,
         _state
     ) { scannedDevices, pairedDevices, state ->
-        state.copy(
-            scannedDevices = scannedDevices,
-            pairedDevices = pairedDevices
-        )
+        state.copy(scannedDevices = scannedDevices, pairedDevices = pairedDevices)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), _state.value)
 
     private val _paymentStatus = MutableSharedFlow<Boolean>()
     val paymentStatus = _paymentStatus.asSharedFlow()
 
     private val TARGET_DEVICE_NAME = "ESP32-Bluetooth"
-
-    private val seenTransactionIds = mutableSetOf<String>()
+    private var lastConnectedDevice: BluetoothDeviceDomain? = null
+    private val processedTransactionIds = mutableSetOf<String>()
     private var paymentCheckJob: Job? = null
+    private var baselineTime: Long = 0L
 
-    // 🔥 SEPAY CONFIG
-    private val API_TOKEN = "6UEOJPRT4BXY35YID8ICK2WPVPTR9NOZBQSUXD1PBLQN0WJVKMODLKGYWCEBHE5K"
-    private val ACCOUNT_NUMBER = "VQRQAIDDN1936"
+    private val SEPAY_TOKEN = "6UEOJPRT4BXY35YID8ICK2WPVPTR9NOZBQSUXD1PBLQN0WJVKMODLKGYWCEBHE5K"
+    private val SEPAY_ACCOUNT = "VQRQAIDDN1936"
 
     private val sePayApi: SePayApi by lazy {
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
-
-        val client = OkHttpClient.Builder()
-            .addInterceptor(logging)
-            .build()
-
+        val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.HEADERS }
+        val client = OkHttpClient.Builder().addInterceptor(logging).build()
         Retrofit.Builder()
             .baseUrl("https://my.sepay.vn/userapi/")
             .addConverterFactory(GsonConverterFactory.create())
@@ -66,126 +62,233 @@ class BluetoothViewModel @Inject constructor(
     }
 
     init {
-        Log.d("BluetoothLog", "ViewModel started")
-        
-        // 🔥 VÒNG LẶP TỰ ĐỘNG QUÉT VÀ KẾT NỐI
+        Log.d("VendingMachine", ">>> KHỞI ĐỘNG HỆ THỐNG <<<")
+        viewModelScope.launch { loadInitialBaseline() }
+
+        // Auto scan & kết nối ESP32
         viewModelScope.launch {
             while (true) {
                 if (!state.value.isConnected && !state.value.isConnecting) {
-                    Log.d("BluetoothLog", "Đang tự động tìm kiếm máy bán nước...")
                     startScan()
+                    delay(4000)
+                    stopScan()
                 }
-                delay(10000)
+                delay(8000)
             }
         }
 
-        // 🔥 TỰ ĐỘNG KẾT NỐI KHI THẤY ESP32 TRONG DANH SÁCH QUÉT
         bluetoothController.scannedDevice
             .onEach { devices ->
                 val target = devices.find {
                     it.name?.trim()?.equals(TARGET_DEVICE_NAME, true) == true
                 }
-
-                if (target != null && !state.value.isConnected && !state.value.isConnecting) {
-                    Log.d("BluetoothLog", "Đã tìm thấy máy! Đang kết nối...")
-                    stopScan()
+                if (target != null && !state.value.isConnected && !state.value.isConnecting)
                     connectToDevice(target)
-                }
-            }
-            .launchIn(viewModelScope)
+            }.launchIn(viewModelScope)
 
-        // 🔥 LẮNG NGHE PHẢN HỒI TỪ ESP32
         bluetoothController.incomingMessages
             .onEach { msg ->
-                Log.d("BluetoothLog", "ESP: $msg")
-                if (msg.contains("COMPLETED")) {
-                    _paymentStatus.emit(true)
+                Log.d("BluetoothLog", "ESP32 gửi: $msg")
+                if (msg.contains("COMPLETED", ignoreCase = true)) {
+                    Log.d("VendingMachine", "XÁC NHẬN: Hoàn tất nhả nước.")
+                    onPaymentDetected()
                 }
-            }
-            .launchIn(viewModelScope)
+            }.launchIn(viewModelScope)
     }
 
-    private suspend fun loadBaseline() {
+    private suspend fun loadInitialBaseline() {
         try {
-            val res = sePayApi.getTransactions("Bearer $API_TOKEN", ACCOUNT_NUMBER)
-            seenTransactionIds.clear()
-            res.transactions.forEach {
-                it.id?.let { id -> seenTransactionIds.add(id) }
-            }
+            val res = sePayApi.getTransactions("Bearer $SEPAY_TOKEN", SEPAY_ACCOUNT, limit = 10)
+            res.transactions.forEach { it.id?.let { id -> processedTransactionIds.add(id) } }
+            baselineTime = System.currentTimeMillis()
+            Log.d("SePayLog", "Đã lưu mốc ${processedTransactionIds.size} GD cũ.")
         } catch (e: Exception) {
-            Log.e("SePayLog", "Lỗi lấy dữ liệu ban đầu: ${e.message}")
+            Log.e("SePayLog", "Lỗi tải mốc: ${e.message}")
         }
     }
 
-    private fun startCheckingPayment() {
+    private fun startCheckingPayment(product: SelectedProduct) {
         paymentCheckJob?.cancel()
         paymentCheckJob = viewModelScope.launch {
             val startTime = System.currentTimeMillis()
+            val cleanId = product.id.uppercase().trim()
 
-            while (System.currentTimeMillis() - startTime < 120000) {
+            Log.d("SePayLog", "Đợi tiền: $cleanId | ${product.price}đ")
+
+            while (System.currentTimeMillis() - startTime < 180_000) {
+
                 try {
-                    val res = sePayApi.getTransactions("Bearer $API_TOKEN", ACCOUNT_NUMBER)
-                    val newTx = res.transactions.firstOrNull {
-                        it.id != null && it.id !in seenTransactionIds
+                    val res = sePayApi.getTransactions(
+                        "Bearer $SEPAY_TOKEN", SEPAY_ACCOUNT, limit = 10
+                    )
+
+                    res.transactions.forEach { tx ->
+                        Log.d("TX_DEBUG", "id=${tx.id} | amount=${tx.amountIn} | content=${tx.content} | date=${tx.date} | processed=${tx.id in processedTransactionIds}")
                     }
+
+                    val newTx = res.transactions.firstOrNull { tx ->
+                        tx.id != null
+                                && tx.id !in processedTransactionIds
+                                && tx.content.contains(cleanId, ignoreCase = true)
+                                && runCatching { tx.amountIn.toDouble().toInt() >= product.price }.getOrDefault(false)
+                                && isTransactionAfterBaseline(tx.date)
+                    }
+
 
                     if (newTx != null) {
-                        Log.d("SePayLog", "Thanh toán thành công ID: ${newTx.id}")
-                        
-                        // QUY ĐỊNH KÍ HIỆU GỬI CHO ESP32
-                        val command = when(state.value.selectedProduct) {
-                            "COCA" -> "COCA\n"
-                            "WATER" -> "WATER\n"
-                            else -> "ON\n"
-                        }
-                        
-                        val success = (bluetoothController as? AndroidBluetoothController)
-                            ?.sendCommand(command) == true
+                        Log.d("SePayLog", "TIỀN VỀ! ID: ${newTx.id} | ${newTx.amountIn}đ")
+                        processedTransactionIds.add(newTx.id!!)
 
-                        if (success) {
-                            seenTransactionIds.add(newTx.id!!)
-                            _paymentStatus.emit(true)
-                            break
+                        // Lưu Supabase
+                        if (sessionManager.isLoggedIn) {
+                            viewModelScope.launch {
+                                SupabaseRepository.saveOrder(
+                                    uid = sessionManager.currentUid!!,
+                                    productId = product.id,
+                                    productName = product.name,
+                                    price = product.price
+                                ).onSuccess { Log.d("Supabase", "Lưu đơn thành công: ${product.name}") }
+                                    .onFailure { Log.e("Supabase", "Lỗi lưu: ${it.message}") }
+                            }
                         }
+
+                        // Gửi lệnh Bluetooth
+                        var sent = false
+                        for (attempt in 1..3) {
+                            if (!state.value.isConnected) {
+                                Log.w("BluetoothLog", "Chờ kết nối BT lần $attempt...")
+                                lastConnectedDevice?.let { connectToDevice(it) }
+                                delay(5000)
+                            }
+                            sent = bluetoothController.trySendMessage("$cleanId\n")
+                            if (sent) {
+                                Log.d("BluetoothLog", "Gửi ESP32 thành công lần $attempt!")
+                                break
+                            }
+                            Log.w("BluetoothLog", "Thất bại lần $attempt, thử lại...")
+                            delay(1500)
+                        }
+
+                        if (!sent) Log.e("BluetoothLog", "Không gửi được sau 3 lần!")
+
+                        _paymentStatus.emit(true)
+                        break
                     }
+
                 } catch (e: Exception) {
                     Log.e("SePayLog", "Lỗi API: ${e.message}")
                 }
-                delay(3000)
+
+                delay(6000)
+            }
+
+            if (state.value.selectedProduct != null) {
+                Log.w("SePayLog", "Hết 3 phút chờ thanh toán.")
             }
         }
     }
 
     fun selectProduct(productId: String) {
-        _state.update { it.copy(selectedProduct = productId) }
+        val beverage = SampleBeverages.find { it.id == productId }
+        if (beverage == null) {
+            Log.e("VendingMachine", "Không tìm thấy sản phẩm: $productId")
+            return
+        }
         viewModelScope.launch {
-            if (state.value.isConnected) {
-                loadBaseline()
-                startCheckingPayment()
+            var finalPrice = beverage.price
+
+            // Lấy discount nếu đã đăng nhập
+            if (sessionManager.isLoggedIn) {
+                val profile = SupabaseRepository
+                    .getUserProfile(sessionManager.currentUid!!)
+                    .getOrNull()
+
+                when (profile?.discount_type) {
+                    "FIX_5K" -> {
+                        finalPrice = (beverage.price - 5000).coerceAtLeast(0)
+                        Log.d("VendingMachine", "Giảm 5k: ${beverage.price} → $finalPrice")
+                    }
+                    "PERCENT_20" -> if (beverage.price >= 20000) {
+                        finalPrice = (beverage.price * 0.8).toInt()
+                        Log.d("VendingMachine", "Giảm 20%: ${beverage.price} → $finalPrice")
+                    }
+                    "FREE_WATER" -> if (productId == "WATER" || productId == "AQUAFINA") {
+                        finalPrice = 0
+                        Log.d("VendingMachine", "Nước suối miễn phí!")
+                    }
+                    "FREE_COCA" -> if (productId == "COCA") {
+                        finalPrice = 0
+                        Log.d("VendingMachine", "Coca miễn phí!")
+                    }
+                    "FREE_2_TEA" -> if (productId == "TEA" || productId == "C2") {
+                        finalPrice = 0
+                        Log.d("VendingMachine", "Trà miễn phí!")
+                    }
+                }
+            }
+
+
+            val product = SelectedProduct(
+            id = beverage.id,
+            name = beverage.name,
+            price = beverage.price
+        )
+
+        Log.d("VendingMachine", "Chọn món: ${product.name} - ${product.price}đ")
+        _state.update { it.copy(selectedProduct = product) }
+            if (finalPrice == 0) {
+                // Miễn phí → gửi lệnh Bluetooth luôn, không cần chờ tiền
+                Log.d("VendingMachine", "Sản phẩm miễn phí → gửi lệnh ngay")
+                var sent = false
+                val cleanId = product.id.uppercase().trim()
+
+                // Thêm logic kiểm tra kết nối lại giống hệt phần thanh toán
+                for (attempt in 1..3) {
+                    if (!state.value.isConnected) {
+                        Log.w("BluetoothLog", "Chờ kết nối BT lần $attempt (Miễn phí)...")
+                        lastConnectedDevice?.let { connectToDevice(it) }
+                        delay(5000)
+                    }
+                    sent = bluetoothController.trySendMessage("$cleanId\n")
+                    if (sent) {
+                        Log.d("BluetoothLog", "Gửi ESP32 thành công (miễn phí) lần $attempt!")
+                        break
+                    }
+                    Log.w("BluetoothLog", "Thất bại lần $attempt, thử lại...")
+                    delay(1500)
+                }
+
+                if (!sent) Log.e("BluetoothLog", "Không gửi được đồ miễn phí sau 3 lần!")
+
+                // Lưu đơn với giá 0
+                if (sessionManager.isLoggedIn) {
+                    SupabaseRepository.saveOrder(
+                        uid = sessionManager.currentUid!!,
+                        productId = product.id,
+                        productName = product.name,
+                        price = 0
+                    )
+                }
+                _paymentStatus.emit(true)
             } else {
-                Log.e("BluetoothLog", "Chưa kết nối với máy bán nước")
+                // Có tiền → chờ thanh toán bình thường
+                startCheckingPayment(product)
             }
         }
     }
 
     fun connectToDevice(device: BluetoothDeviceDomain) {
+        lastConnectedDevice = device
         _state.update { it.copy(isConnecting = true) }
         bluetoothController.connectToDevice(device)
             .onEach { result ->
                 when (result) {
-                    is ConnectionResult.ConnectionEstablished -> {
-                        Log.d("BluetoothLog", "Đã kết nối thành công")
-                        _state.update { it.copy(isConnected = true, isConnecting = false, errorMessage = null) }
-                    }
-                    is ConnectionResult.Error -> {
-                        Log.e("BluetoothLog", "Lỗi kết nối: ${result.message}")
-                        _state.update {
-                            it.copy(isConnected = false, isConnecting = false, errorMessage = result.message)
-                        }
-                    }
+                    is ConnectionResult.ConnectionEstablished ->
+                        _state.update { it.copy(isConnected = true, isConnecting = false) }
+                    is ConnectionResult.Error ->
+                        _state.update { it.copy(isConnected = false, isConnecting = false) }
                 }
-            }
-            .launchIn(viewModelScope)
+            }.launchIn(viewModelScope)
     }
 
     fun onPaymentDetected() {
@@ -195,4 +298,18 @@ class BluetoothViewModel @Inject constructor(
 
     fun startScan() = bluetoothController.startDiscovery()
     fun stopScan() = bluetoothController.stopDiscovery()
+
+    private fun isTransactionAfterBaseline(dateStr:String): Boolean {
+        return try{
+            val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            val txTime = sdf.parse(dateStr)?.time ?: 0L
+            val result = txTime > baselineTime
+            Log.d("SepayLog", "TX=$txTime baseline=$baselineTime after=$result")
+            result
+
+        } catch (e: Exception) {
+            Log.e("SepayLog", "Lỗi parse thời gian: ${e.message}")
+            true // parse lỗi -> cho qua để không bỏ sót GD
+        }
+    }
 }

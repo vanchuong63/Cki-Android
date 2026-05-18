@@ -3,6 +3,7 @@ package com.example.bluetooth.di
 import android.content.Context
 import com.example.bluetooth.data.bluetooth.AndroidBluetoothController
 import com.example.bluetooth.domain.controller.BluetoothController
+import com.example.bluetooth.subpabase.SessionManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -18,5 +19,11 @@ object AppModule {
     @Singleton
     fun provideBluetoothController(@ApplicationContext context: Context): BluetoothController {
         return AndroidBluetoothController(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideSessionManager(): SessionManager {
+        return SessionManager()
     }
 }
