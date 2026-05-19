@@ -16,6 +16,7 @@ import com.example.bluetooth.domain.controller.BluetoothController
 import com.example.bluetooth.domain.model.BluetoothDeviceDomain
 import com.example.bluetooth.domain.model.ConnectionResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import java.io.IOException
@@ -43,7 +44,10 @@ class AndroidBluetoothController(
     private val _pairedDevices = MutableStateFlow<List<BluetoothDeviceDomain>>(emptyList())
     override val pairedDevice: StateFlow<List<BluetoothDeviceDomain>> = _pairedDevices.asStateFlow()
 
-    private val _incomingMessages = MutableSharedFlow<String>()
+    private val _incomingMessages = MutableSharedFlow<String>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
     override val incomingMessages: SharedFlow<String> = _incomingMessages.asSharedFlow()
 
     private val foundDeviceReceiver = FoundDeviceReceiver { device ->
@@ -106,7 +110,7 @@ class AndroidBluetoothController(
                     val line = reader?.readLine()
 
                     if (line != null) {
-                        Log.d("BluetoothLog", "Nhận full line: $line")
+                        Log.d("BluetoothLog", "Nhận: $line")
                         _incomingMessages.tryEmit(line.trim())
                     }
 
@@ -118,21 +122,20 @@ class AndroidBluetoothController(
         }.start()
     }
 
-    // CẬP NHẬT HÀM GỬI LỆNH ĐỂ CHẮC CHẮN HƠN
-    suspend fun sendCommand(command: String): Boolean {
+    override suspend fun trySendMessage(message: String): Boolean {
         return withContext(Dispatchers.IO) {
             if (currentSocket == null || !currentSocket!!.isConnected) {
-                Log.e("BluetoothLog", "Socket không khả dụng hoặc chưa kết nối!")
+                Log.e("BluetoothLog", "Socket không khả dụng!")
                 return@withContext false
             }
             try {
                 val outputStream = currentSocket?.outputStream
-                outputStream?.write(command.toByteArray(Charsets.UTF_8))
+                outputStream?.write(message.toByteArray(Charsets.UTF_8))
                 outputStream?.flush()
-                Log.d("BluetoothLog", "Đã gửi chuỗi: $command")
+                Log.d("BluetoothLog", "Gửi: $message")
                 true
             } catch (e: IOException) {
-                Log.e("BluetoothLog", "Lỗi gửi lệnh: ${e.message}")
+                Log.e("BluetoothLog", "Lỗi gửi: ${e.message}")
                 false
             }
         }

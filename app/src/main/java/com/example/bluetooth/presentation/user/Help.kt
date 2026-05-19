@@ -1,4 +1,4 @@
-package com.example.bluetooth.presentation.components
+package com.example.bluetooth.presentation.user
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,7 +16,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.bluetooth.presentation.BluetoothUiState
 
 @Preview(showBackground = true)
 @Composable
