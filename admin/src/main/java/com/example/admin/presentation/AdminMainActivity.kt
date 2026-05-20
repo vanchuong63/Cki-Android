@@ -1,8 +1,12 @@
 package com.example.admin.presentation
 
 import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -39,6 +43,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.admin.R
+import com.example.admin.data.AdminNotification
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -64,6 +70,9 @@ fun AdminApp(isBluetoothEnabled: Boolean, bluetoothAdapter: BluetoothAdapter?) {
     val context = LocalContext.current
     val viewModel: AdminViewModel = hiltViewModel()
     val unread by viewModel.unreadCount.collectAsState()
+    val notifications by viewModel.notifications.collectAsState()
+    var knownNotificationIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var hasLoadedNotifications by remember { mutableStateOf(false) }
 
     // 1. Launcher để yêu cầu bật Bluetooth
     val enableBluetoothLauncher = rememberLauncherForActivityResult(
@@ -89,16 +98,30 @@ fun AdminApp(isBluetoothEnabled: Boolean, bluetoothAdapter: BluetoothAdapter?) {
 
     // 3. Tự động xin quyền khi mở App
     LaunchedEffect(Unit) {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-        } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        val permissions = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(Manifest.permission.BLUETOOTH_SCAN)
+                add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }.toTypedArray()
         permissionLauncher.launch(permissions)
+    }
+
+    LaunchedEffect(notifications) {
+        val currentIds = notifications.map { notificationKey(it) }.toSet()
+        if (!hasLoadedNotifications) {
+            knownNotificationIds = currentIds
+            hasLoadedNotifications = true
+        } else {
+            notifications
+                .filter { !it.isRead && notificationKey(it) !in knownNotificationIds }
+                .forEach { showAdminSystemNotification(context, it) }
+            knownNotificationIds = currentIds
+        }
     }
 
     var selectedTab by remember { mutableStateOf(0) }
@@ -149,4 +172,41 @@ fun AdminApp(isBluetoothEnabled: Boolean, bluetoothAdapter: BluetoothAdapter?) {
             }
         }
     }
+}
+
+private const val LOW_STOCK_CHANNEL_ID = "low_stock_alerts"
+
+private fun notificationKey(notification: AdminNotification): String =
+    notification.id ?: "${notification.machineId}|${notification.message}|${notification.createdAt}"
+
+private fun showAdminSystemNotification(context: Context, notification: AdminNotification) {
+    val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val channel = NotificationChannel(
+            LOW_STOCK_CHANNEL_ID,
+            "Canh bao kho hang",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Thong bao khi san pham sap het hoac da het hang"
+        }
+        manager.createNotificationChannel(channel)
+    }
+
+    val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Notification.Builder(context, LOW_STOCK_CHANNEL_ID)
+    } else {
+        @Suppress("DEPRECATION")
+        Notification.Builder(context)
+    }
+
+    val builtNotification = builder
+        .setSmallIcon(R.drawable.ic_launcher_foreground)
+        .setContentTitle("Canh bao het hang")
+        .setContentText(notification.message)
+        .setStyle(Notification.BigTextStyle().bigText(notification.message))
+        .setAutoCancel(true)
+        .build()
+
+    manager.notify(notificationKey(notification).hashCode(), builtNotification)
 }

@@ -3,6 +3,9 @@ package com.example.bluetooth.subpabase
 import android.util.Log
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 
@@ -30,6 +33,23 @@ data class Order(
 data class ProfileUpdate(
     val points: Int,
     val discount_type: String?
+)
+
+@Serializable
+data class MachineInventory(
+    @SerialName("machine_id") val machineId: String = "",
+    @SerialName("product_id") val productId: String = "",
+    @SerialName("product_name") val productName: String = "",
+    val quantity: Int = 0,
+    @SerialName("min_quantity") val minQuantity: Int = 0
+)
+
+@Serializable
+data class NotificationInsert(
+    @SerialName("machine_id") val machineId: String,
+    @SerialName("machine_name") val machineName: String,
+    val message: String,
+    @SerialName("is_read") val isRead: Boolean = false
 )
 // ── Repository ───────────────────────────────────────────────
 
@@ -148,5 +168,50 @@ object SupabaseRepository {
             Log.e("Supabase", "Lỗi đổi quà: ${e.message}")
             Result.failure(e)
         }
+    }
+
+    suspend fun decreaseStock(productId: String): Result<Unit> {
+        return try {
+            withContext(Dispatchers.IO) {
+                val inventory = supabase.postgrest["machine_inventory"]
+                    .select { filter { eq("product_id", productId) } }
+                    .decodeSingle<MachineInventory>()
+
+                val newQuantity = (inventory.quantity - 1).coerceAtLeast(0)
+
+                supabase.postgrest["machine_inventory"].update(
+                    mapOf("quantity" to newQuantity)
+                ) {
+                    filter { eq("product_id", productId) }
+                }
+
+                if (newQuantity <= inventory.minQuantity) {
+                    sendOutOfStockNotification(inventory.copy(quantity = newQuantity))
+                }
+
+                Result.success(Unit)
+            }
+        } catch (e: Exception) {
+            Log.e("Supabase", "Loi tru kho cho $productId: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun sendOutOfStockNotification(inventory: MachineInventory) {
+        val machineId = inventory.machineId.ifBlank { "M01" }
+        val message = if (inventory.quantity <= 0) {
+            "${inventory.productName} da het hang"
+        } else {
+            "${inventory.productName} sap het hang, con ${inventory.quantity} chai"
+        }
+
+        supabase.postgrest["notifications"].insert(
+            NotificationInsert(
+                machineId = machineId,
+                machineName = "May $machineId",
+                message = message,
+                isRead = false
+            )
+        )
     }
 }

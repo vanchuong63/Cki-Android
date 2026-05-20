@@ -51,8 +51,26 @@ object SupabaseAdminRepository {
 
     // ── INVENTORY ─────────────────────────────────────────────────────────────
     suspend fun updateInventory(machineId: String, inventory: MachineInventory): Result<Unit> = runCatching {
-        // Sử dụng upsert để tự động thêm mới hoặc ghi đè nếu trùng mã sản phẩm
-        supabase.postgrest["machine_inventory"].upsert(inventory.copy(machineId = machineId))
+        val updatePayload = mapOf(
+            "quantity" to inventory.quantity,
+            "min_quantity" to inventory.minQuantity,
+            "product_name" to inventory.productName
+        )
+
+        runCatching {
+            supabase.postgrest["machine_inventory"].update(updatePayload) {
+                filter { eq("product_id", inventory.productId) }
+            }
+        }.recoverCatching {
+            supabase.postgrest["machine_inventory"].update(updatePayload) {
+                filter {
+                    eq("machine_id", machineId)
+                    eq("product_id", inventory.productId)
+                }
+            }
+        }.recoverCatching {
+            supabase.postgrest["machine_inventory"].upsert(inventory.copy(machineId = machineId))
+        }.getOrThrow()
     }
 
     // lấy dl kho hàng

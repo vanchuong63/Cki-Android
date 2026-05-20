@@ -171,6 +171,7 @@ class BluetoothViewModel @Inject constructor(
 
                         if (!sent) Log.e("BluetoothLog", "Không gửi được sau 3 lần!")
 
+                        decreaseStockAndNotify(product)
                         _paymentStatus.emit(true)
                         break
                     }
@@ -269,6 +270,7 @@ class BluetoothViewModel @Inject constructor(
                         price = 0
                     )
                 }
+                decreaseStockAndNotify(product)
                 _paymentStatus.emit(true)
             } else {
                 // Có tiền → chờ thanh toán bình thường
@@ -330,6 +332,7 @@ class BluetoothViewModel @Inject constructor(
                     }
                 }
                 _state.update { it.copy(isCompletingOrder = false) }
+                decreaseStockAndNotify(product)
                 _paymentStatus.emit(true)
             } else {
                 _state.update {
@@ -349,6 +352,16 @@ class BluetoothViewModel @Inject constructor(
 
     fun startScan() = bluetoothController.startDiscovery()
     fun stopScan() = bluetoothController.stopDiscovery()
+
+    private suspend fun decreaseStockAndNotify(product: SelectedProduct) {
+        SupabaseRepository.decreaseStock(product.id)
+            .onSuccess {
+                Log.d("Inventory", "Da tru kho cho ${product.id}")
+            }
+            .onFailure {
+                Log.e("Inventory", "Khong tru duoc kho cho ${product.id}: ${it.message}")
+            }
+    }
 
     private fun isTransactionAfterBaseline(dateStr:String): Boolean {
         return try{
