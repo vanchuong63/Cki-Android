@@ -50,7 +50,7 @@ import java.text.DecimalFormat
 val PrimaryBlue = Color(0xFF00AEEF)
 val SecondaryBlue = Color(0xFF0083B0)
 val ActiveGreen = Color(0xFF00C853)
-val BgGrayLight = Color(0xFFF1F2F6)
+val BgGrayLight = Color(0xFFF8F9FA)
 val BadgeOrange = Color(0xFFFF9F43)
 val PriceBlue = Color(0xFF2980B9)
 
@@ -128,8 +128,10 @@ fun DeviceScreen(
     val sheetState = rememberModalBottomSheetState()
     var selectedBeverageForConfirm by remember { mutableStateOf<Beverage?>(null) }
 
+    val gridBottomPadding = if (totalQuantity > 0) 96.dp else 24.dp
+
     Scaffold(
-        containerColor = Color.White,
+        containerColor = BgGrayLight,
         topBar = {
             HeaderSection(
                 isConnected = state.isConnected,
@@ -139,13 +141,18 @@ fun DeviceScreen(
             )
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().background(BgGrayLight)) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentPadding = PaddingValues(start = 0.dp, top = 0.dp, end = 0.dp, bottom = 120.dp),
+                contentPadding = PaddingValues(
+                    start = 0.dp,
+                    top = 0.dp,
+                    end = 0.dp,
+                    bottom = gridBottomPadding
+                ),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -363,7 +370,7 @@ fun CategoryChips(
                 "Nước ngọt" -> Triple(Color(0xFFFFF1F2), Color(0xFFD32F2F), Color(0xFFD32F2F))
                 "Nước lọc" -> Triple(Color(0xFFE0F7FA), Color(0xFF1976D2), Color(0xFF1976D2))
                 "Trà" -> Triple(Color(0xFFF1F8E9), Color(0xFF388E3C), Color(0xFF388E3C))
-                "Tăng lực" -> Triple(Color(0xFF1C1E23), Color(0xFF00E676), Color(0xFFFF9100))
+                "Tăng lực" -> Triple(Color(0xFFFFF4E5), Color(0xFFD35400), Color(0xFFFF9100))
                 else -> Triple(Color.White, Color.Gray, Color.Gray)
             }
 

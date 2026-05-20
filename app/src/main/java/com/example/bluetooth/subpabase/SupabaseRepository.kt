@@ -88,10 +88,7 @@ object SupabaseRepository {
                 Log.d("Supabase", "Tiến hành tích điểm: ${profile.points} -> $newPoints (+$pointsToAdd)")
                 
                 supabase.postgrest["users"].update(
-                    mapOf(
-                        "points" to newPoints,
-                        "discount_type" to null // Tiêu thụ luôn ưu đãi nếu có
-                    )
+                    mapOf("points" to newPoints)
                 ) { filter { eq("id", uid) } }
                 
                 Log.d("Supabase", "Đã cập nhật điểm vào Profile thành công")

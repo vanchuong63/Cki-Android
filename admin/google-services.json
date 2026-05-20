@@ -1,0 +1,69 @@
+{
+  "project_info": {
+    "project_number": "163760602548",
+    "firebase_url": "https://planning-with-ai-ee2a3-default-rtdb.firebaseio.com",
+    "project_id": "planning-with-ai-ee2a3",
+    "storage_bucket": "planning-with-ai-ee2a3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:163760602548:android:5ead64cfd7632080ed06e1",
+        "android_client_info": {
+          "package_name": "com.example.admin"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "163760602548-4p4iamud3obo28cln0lbgvlva7p804ao.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6VW9Zb-AECE0VRURQy3ZFL4Z-yDmr3rE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "163760602548-4p4iamud3obo28cln0lbgvlva7p804ao.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:163760602548:android:75c86a7ef717eb60ed06e1",
+        "android_client_info": {
+          "package_name": "com.example.bluetooth"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "163760602548-4p4iamud3obo28cln0lbgvlva7p804ao.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6VW9Zb-AECE0VRURQy3ZFL4Z-yDmr3rE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "163760602548-4p4iamud3obo28cln0lbgvlva7p804ao.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

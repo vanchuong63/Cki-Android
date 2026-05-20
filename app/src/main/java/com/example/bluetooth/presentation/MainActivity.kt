@@ -13,21 +13,30 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -40,6 +49,7 @@ import com.example.bluetooth.presentation.log.RegisterScreen
 import com.example.bluetooth.presentation.user.DeviceScreen
 import com.example.bluetooth.presentation.user.HelpScreen
 import com.example.bluetooth.presentation.user.HistoryScreen
+import com.example.bluetooth.presentation.user.NearbyMachinesScreen
 import com.example.bluetooth.presentation.user.PaymentScreen
 import com.example.bluetooth.presentation.user.RewardsScreen
 import com.example.bluetooth.presentation.user.ProfileScreen
@@ -115,94 +125,23 @@ class MainActivity : ComponentActivity() {
                 }
 
                 Scaffold(
+                    containerColor = MaterialTheme.colorScheme.background,
                     bottomBar = {
                         if (!hideBottomBar) {
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 24.dp, vertical = 24.dp)
-                                    .shadow(12.dp, RoundedCornerShape(24.dp))
-                                    .background(Color.White, RoundedCornerShape(24.dp))
-                                    .height(80.dp)
-                            ) {
-                                NavigationBar(
-                                    containerColor = Color.Transparent,
-                                    tonalElevation = 0.dp
-                                ) {
-                                    val itemColors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = Color(0xFF0984E3),
-                                        selectedTextColor = Color(0xFF0984E3),
-                                        indicatorColor = Color(0xFF0984E3).copy(alpha = 0.1f),
-                                        unselectedIconColor = Color.LightGray
-                                    )
-                                    // ── Mua nước ──────────────────────────────
-                                    NavigationBarItem(
-                                        selected = currentRoute == "selection",
-                                        onClick = {
-                                            if (currentRoute != "selection") {
-                                                navController.navigate("selection") {
-                                                    popUpTo("selection") { inclusive = true }
-                                                }
+                            AppBottomBar(
+                                currentRoute = currentRoute,
+                                isGuest = isGuest,
+                                onNavigate = { route ->
+                                    if (currentRoute != route) {
+                                        navController.navigate(route) {
+                                            launchSingleTop = true
+                                            if (route == "selection") {
+                                                popUpTo("selection") { inclusive = true }
                                             }
-                                        },
-                                        label = { Text("Mua nước", fontSize = 11.sp) },
-                                        icon = { Icon(Icons.Default.Home, contentDescription = null) },
-                                        colors = itemColors
-                                    )
-
-                                    if (!isGuest) {
-                                        // ── Lịch sử ───────────────────────────────
-                                        NavigationBarItem(
-                                            selected = currentRoute == "history",
-                                            onClick = {
-                                                if (currentRoute != "history") {
-                                                    navController.navigate("history")
-                                                }
-                                            },
-                                            label = { Text("Lịch sử", fontSize = 11.sp) },
-                                            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-                                            colors = itemColors
-                                        )
-
-                                        // ── Phần thưởng ───────────────────────────
-                                        NavigationBarItem(
-                                            selected = currentRoute == "reward",
-                                            onClick = {
-                                                if (currentRoute != "reward") {
-                                                    navController.navigate("reward")
-                                                }
-                                            },
-                                            label = { Text("Thưởng", fontSize = 11.sp) },
-                                            icon = { Icon(Icons.Default.Star, contentDescription = null) },
-                                            colors = itemColors
-                                        )
-
-                                        NavigationBarItem(
-                                            selected = currentRoute == "profile",
-                                            onClick = {
-                                                if (currentRoute != "profile") {
-                                                    navController.navigate("profile")
-                                                }
-                                            },
-                                            label = { Text("Cá nhân", fontSize = 11.sp) },
-                                            icon = { Icon(Icons.Default.Person, contentDescription = null) },
-                                            colors = itemColors
-                                        )
+                                        }
                                     }
-
-                                    // ── Hỗ trợ ────────────────────────────────
-                                    NavigationBarItem(
-                                        selected = currentRoute == "help",
-                                        onClick = {
-                                            if (currentRoute != "help") {
-                                                navController.navigate("help")
-                                            }
-                                        },
-                                        label = { Text("Hỗ trợ", fontSize = 11.sp) },
-                                        icon = { Icon(Icons.Default.Info, contentDescription = null) },
-                                        colors = itemColors
-                                    )
                                 }
-                            }
+                            )
                         }
                     }
                 ) { paddingValues ->
@@ -272,6 +211,9 @@ class MainActivity : ComponentActivity() {
                                             popUpTo("payment") { inclusive = true }
                                         }
                                     },
+                                    onClaimFreeOrder = {
+                                        viewModel.claimFreeOrder()
+                                    },
                                     onBack = {
                                         navController.popBackStack()
                                     }
@@ -280,6 +222,10 @@ class MainActivity : ComponentActivity() {
 
                             composable("help") {
                                 HelpScreen()
+                            }
+
+                            composable("nearby") {
+                                NearbyMachinesScreen()
                             }
 
                             composable("history") {
@@ -317,5 +263,114 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+}
+
+private data class BottomNavItem(
+    val route: String,
+    val label: String,
+    val icon: ImageVector
+)
+
+@Composable
+private fun AppBottomBar(
+    currentRoute: String?,
+    isGuest: Boolean,
+    onNavigate: (String) -> Unit
+) {
+    val items = buildList {
+        add(BottomNavItem("selection", "Mua nước", Icons.Default.Home))
+        add(BottomNavItem("nearby", "Tìm máy", Icons.Default.LocationOn))
+        if (!isGuest) {
+            add(BottomNavItem("history", "Lịch sử", Icons.AutoMirrored.Filled.List))
+            add(BottomNavItem("reward", "Thưởng", Icons.Default.Star))
+            add(BottomNavItem("profile", "Cá nhân", Icons.Default.Person))
+        }
+        add(BottomNavItem("help", "Hỗ trợ", Icons.Default.Info))
+    }
+
+    val rows = if (items.size > 4) items.chunked(3) else listOf(items)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .shadow(10.dp, RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)),
+        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+        color = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            rows.forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowItems.forEach { item ->
+                        BottomNavButton(
+                            item = item,
+                            selected = currentRoute == item.route,
+                            onClick = { onNavigate(item.route) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    repeat(3 - rowItems.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomNavButton(
+    item: BottomNavItem,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val activeColor = Color(0xFF00AEEF)
+    val inactiveColor = Color(0xFF6B7280)
+    val backgroundColor = if (selected) activeColor.copy(alpha = 0.12f) else Color.Transparent
+    val contentColor = if (selected) activeColor else inactiveColor
+
+    Column(
+        modifier = modifier
+            .height(64.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(backgroundColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(if (selected) 28.dp else 26.dp)
+                .clip(CircleShape)
+                .background(if (selected) Color.White else Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = item.icon,
+                contentDescription = item.label,
+                tint = contentColor,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = item.label,
+            color = contentColor,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            textAlign = TextAlign.Center
+        )
     }
 }
