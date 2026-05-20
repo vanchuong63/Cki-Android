@@ -50,7 +50,7 @@ object SupabaseAdminRepository {
     }
 
     // ── INVENTORY ─────────────────────────────────────────────────────────────
-    suspend fun updateInventory(machineId: String, inventory: MachineInventory): Result<Unit> = runCatching {
+    suspend fun updateInventory(machineId: String, inventory: MachineInventory): Result<MachineInventory> = runCatching {
         val updatePayload = mapOf(
             "quantity" to inventory.quantity,
             "min_quantity" to inventory.minQuantity,
@@ -71,6 +71,24 @@ object SupabaseAdminRepository {
         }.recoverCatching {
             supabase.postgrest["machine_inventory"].upsert(inventory.copy(machineId = machineId))
         }.getOrThrow()
+
+        val updatedInventory = getInventoryByProductId(inventory.productId)
+            ?: throw IllegalStateException("Khong tim thay san pham ${inventory.productId} sau khi cap nhat")
+
+        if (updatedInventory.quantity != inventory.quantity) {
+            throw IllegalStateException(
+                "Database chua cap nhat ${inventory.productId}: hien tai ${updatedInventory.quantity}, mong muon ${inventory.quantity}"
+            )
+        }
+
+        updatedInventory
+    }
+
+    private suspend fun getInventoryByProductId(productId: String): MachineInventory? {
+        return supabase.postgrest["machine_inventory"]
+            .select(Columns.ALL) { filter { eq("product_id", productId) } }
+            .decodeList<MachineInventory>()
+            .firstOrNull()
     }
 
     // lấy dl kho hàng

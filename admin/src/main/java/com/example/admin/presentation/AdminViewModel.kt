@@ -129,26 +129,11 @@ class AdminViewModel @Inject constructor(
 
     private val _inventoryState = MutableStateFlow<List<MachineInventory>>(emptyList())
     val inventoryState = _inventoryState.asStateFlow()
-    private val pendingInventoryUpdates = MutableStateFlow<Map<String, MachineInventory>>(emptyMap())
 
     init {
         SupabaseAdminRepository.getInventoryFlow()
             .onEach { remoteInventory ->
-                val pending = pendingInventoryUpdates.value
-                val resolvedKeys = pending.filter { (key, pendingItem) ->
-                    remoteInventory.any { remoteItem ->
-                        inventoryKey(remoteItem) == key && remoteItem.quantity == pendingItem.quantity
-                    }
-                }.keys
-
-                if (resolvedKeys.isNotEmpty()) {
-                    pendingInventoryUpdates.update { updates -> updates - resolvedKeys }
-                }
-
-                val activePending = pendingInventoryUpdates.value
-                _inventoryState.value = remoteInventory.map { item ->
-                    activePending[inventoryKey(item)] ?: item
-                }
+                _inventoryState.value = remoteInventory
             }
             .launchIn(viewModelScope)
     }
@@ -173,40 +158,23 @@ class AdminViewModel @Inject constructor(
 
     fun updateInventory(machineId: String, inventory: MachineInventory) {
         viewModelScope.launch {
-            val updatedInventory = inventory.copy(machineId = machineId)
-            val key = inventoryKey(updatedInventory)
-
-            pendingInventoryUpdates.update { it + (key to updatedInventory) }
-            _inventoryState.update { current ->
-                current.map { item ->
-                    if (inventoryKey(item) == key || item.productId == inventory.productId) updatedInventory else item
-                }
-            }
-
             SupabaseAdminRepository.updateInventory(machineId, inventory)
-                .onSuccess {
+                .onSuccess { updatedInventory ->
                     _inventoryState.update { current ->
                         current.map { item ->
-                            if (inventoryKey(item) == key || item.productId == inventory.productId) updatedInventory else item
+                            if (item.productId == updatedInventory.productId) updatedInventory else item
                         }
                     }
-                    if (inventory.quantity <= inventory.minQuantity) {
-                        sendLowStockNotification(machineId, inventory)
+                    if (updatedInventory.quantity <= updatedInventory.minQuantity) {
+                        sendLowStockNotification(machineId, updatedInventory)
                     }
                 }
                 .onFailure { error ->
                     Log.e("AdminInventory", "Cap nhat kho that bai: ${error.message}", error)
-                    pendingInventoryUpdates.update { it - key }
+                    _addMachineState.value = "Loi cap nhat kho: ${error.message}"
                 }
         }
     }
-
-    private fun inventoryKey(inventory: MachineInventory): String =
-        if (inventory.machineId.isNotBlank()) {
-            "${inventory.machineId}|${inventory.productId}"
-        } else {
-            inventory.productId
-        }
 
     private suspend fun sendLowStockNotification(machineId: String, inventory: MachineInventory) {
         val machine = machines.value.find { it.id == machineId } ?: return
