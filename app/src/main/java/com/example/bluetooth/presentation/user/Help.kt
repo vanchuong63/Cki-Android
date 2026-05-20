@@ -107,10 +107,10 @@ fun HelpStepItem(step: String, title: String, description: String, icon: ImageVe
         Surface(
             modifier = Modifier.size(48.dp),
             shape = RoundedCornerShape(12.dp),
-            color = Color(0xFF0984E3).copy(alpha = 0.1f)
+            color = Color(0xFF00AEEF).copy(alpha = 0.1f)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = Color(0xFF0984E3))
+                Icon(icon, contentDescription = null, tint = Color(0xFF00AEEF))
             }
         }
         
@@ -145,7 +145,7 @@ fun ContactCard(icon: ImageVector, label: String, value: String) {
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, tint = Color(0xFF0984E3))
+            Icon(icon, contentDescription = null, tint = Color(0xFF00AEEF))
             Spacer(modifier = Modifier.width(16.dp))
             Column {
                 Text(text = label, fontSize = 12.sp, color = Color.Gray)

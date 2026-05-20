@@ -4,9 +4,6 @@ import android.util.Log
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerialName
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
 
 
 @Serializable
@@ -33,22 +30,6 @@ data class Order(
 data class ProfileUpdate(
     val points: Int,
     val discount_type: String?
-)
-@Serializable
-data class MachineInventory(
-    @SerialName("machine_id") val machineId: String = "",
-    @SerialName("product_id") val productId: String = "",
-    @SerialName("product_name") val productName: String = "",
-    val quantity: Int = 2,
-    @SerialName("min_quantity") val minQuantity: Int = 0
-)
-
-@Serializable
-data class NotificationInsert(
-    @SerialName("machine_id") val machineId: String,
-    @SerialName("machine_name") val machineName: String,
-    val message: String,
-    @SerialName("is_read") val isRead: Boolean = false
 )
 // ── Repository ───────────────────────────────────────────────
 
@@ -89,7 +70,7 @@ object SupabaseRepository {
     ): Result<Unit> {
         return try {
             Log.d("Supabase", "Đang lưu đơn hàng: $productName ($price VNĐ) cho $uid")
-
+            
             // 1. Lưu đơn hàng vào bảng orders
             supabase.postgrest["orders"].insert(
                 Order(
@@ -105,7 +86,7 @@ object SupabaseRepository {
             // Lấy profile mới nhất để tích điểm
             val profileResponse = getUserProfile(uid)
             val profile = profileResponse.getOrNull()
-
+            
             if (profile != null) {
                 val pointsToAdd = price / 1000
                 val newPoints = profile.points + pointsToAdd
@@ -117,7 +98,7 @@ object SupabaseRepository {
                         discount_type = null // Tiêu thụ luôn ưu đãi nếu có
                     )
                 ) { filter { eq("id", uid) } }
-
+                
                 Log.d("Supabase", "Đã cập nhật điểm vào Profile thành công")
                 Result.success(Unit)
             } else {
@@ -151,7 +132,7 @@ object SupabaseRepository {
         return try {
             val profile = getUserProfile(uid).getOrNull() ?: throw Exception("User not found")
             if (profile.points < cost) throw Exception("Không đủ điểm")
-
+            
             val newPoints = profile.points - cost
             Log.d("Supabase", "Đổi quà: trừ $cost điểm, còn lại $newPoints")
 
@@ -161,75 +142,11 @@ object SupabaseRepository {
                     discount_type = discountType
                 )
             ) { filter { eq("id", uid) } }
-
+            
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e("Supabase", "Lỗi đổi quà: ${e.message}")
             Result.failure(e)
         }
     }
-
-    // Hàm tự động trừ đi 1 sản phẩm trong kho khi mua thành công
-    suspend fun decreaseStock(productId: String): Result<Unit> {
-        return try {
-            withContext(Dispatchers.IO) {
-                Log.d("FixKhoDutDiem", "1. Bắt đầu tìm sản phẩm có ID: $productId")
-
-                // Lấy thông tin dòng hiện tại
-                val currentInventory = supabase.postgrest["machine_inventory"]
-                    .select { filter { eq("product_id", productId) } }
-                    .decodeSingle<MachineInventory>()
-
-                val currentQty = currentInventory.quantity
-                Log.d("FixKhoDutDiem", "2. Tìm thấy sản phẩm trên mạng. Số lượng hiện tại: $currentQty")
-
-                if (currentQty > 0) {
-                    val newQty = currentQty - 1
-
-                    // SỬA CÚ PHÁP: Gọi trực tiếp eq() bên trong khối update, bỏ chữ filter lồng
-                    supabase.postgrest["machine_inventory"].update(
-                        mapOf("quantity" to newQty)
-                    ) {
-                        filter {eq("product_id", productId) }
-                    }
-
-                    Log.d("FixKhoDutDiem", "3. ✅ Đã thực thi lệnh ghi đè số lượng mới ($newQty) lên Supabase!")
-
-                    // Kiểm tra thông báo nếu hết hàng
-                    if (newQty <= currentInventory.minQuantity) {
-                        sendOutOfStockNotification(currentInventory.productName)
-                    }
-                } else {
-                    Log.w("FixKhoDutDiem", "Sản phẩm đã ở mức 0 lon, không thể trừ tiếp.")
-                }
-                Result.success(Unit)
-            }
-        } catch (e: Exception) {
-            // Trục xuất lỗi ẩn ra ngoài Logcat bằng chữ đỏ rực để bắt quả tang
-            Log.e("FixKhoDutDiem", "❌ THẤT BẠI: Lỗi nghiêm trọng khi thao tác kho hàng: ${e.message}", e)
-            Result.failure(e)
-        }
-    }
-
-    // Hàm phụ tự chèn dòng báo động vào bảng notifications của Admin
-    private suspend fun sendOutOfStockNotification(productName: String) {
-        try {
-            withContext(Dispatchers.IO) {
-                // Đóng gói bức thư cảnh báo vào phong bì vừa tạo
-                val notificationData = NotificationInsert(
-                    machineId = "M01",
-                    machineName = "Máy Bán Nước",
-                    message = "Sản phẩm [$productName] tại máy M01 đã hết sạch hàng (0 lon)",
-                    isRead = false
-                )
-
-                // Gửi phong bì lên bảng notifications của Supabase
-                supabase.postgrest["notifications"].insert(notificationData)
-                Log.d("ThongBao", "✅ Đã bắn thông báo lên mạng thành công!")
-            }
-        } catch (e: Exception) {
-            Log.e("ThongBao", "❌ LỖI GỬI THÔNG BÁO: ${e.message}")
-        }
-    }
 }
-

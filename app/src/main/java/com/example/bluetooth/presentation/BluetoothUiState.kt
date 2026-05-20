@@ -14,5 +14,9 @@ data class BluetoothUiState(
     val isConnected: Boolean = false,
     val isConnecting: Boolean = false,
     val errorMessage: String? = null,
-    val selectedProduct: SelectedProduct? = null
+    val selectedProduct: SelectedProduct? = null,
+    val isCheckingReward: Boolean = false,
+    val isFreeOrder: Boolean = false,
+    val paidOrdersUntilFree: Int = 0,
+    val isCompletingOrder: Boolean = false
 )
