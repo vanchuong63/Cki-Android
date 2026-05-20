@@ -1,91 +1,97 @@
-package com.example.admin.presentation
+package com.example.admin.presentation // Nhớ giữ nguyên package của bạn
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
-
-
-private fun formatNotifTime(isoString: String?): String {
-    if (isoString == null) return "Vừa xong"
-    return try {
-        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-        // Cắt bỏ phần milliseconds và timezone nếu có
-        val clean = isoString.substringBefore(".").substringBefore("Z").substringBefore("+")
-        val date = sdf.parse(clean) ?: return isoString
-        SimpleDateFormat("dd/MM HH:mm", Locale("vi")).apply {
-            timeZone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
-        }.format(date)
-    } catch (e: Exception) {
-        isoString.take(16).replace("T", " ")
-    }
-}
 
 @Composable
 fun NotificationScreen(viewModel: AdminViewModel) {
     val notifications by viewModel.notifications.collectAsState()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF0F2F8))
-            .padding(16.dp)
+    // Biến trạng thái để giao diện biết cửa đang đóng hay mở
+    var isDoorOpen by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().background(Color(0xFFF0F2F8)),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            "Thông báo hệ thống", fontSize = 20.sp,
-            fontWeight = FontWeight.Bold, color = Color(0xFF2C3E7A),
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
+        item {
+            Text("Thông báo hệ thống", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E2D60), modifier = Modifier.padding(bottom = 8.dp))
+        }
+
+        // --- BẢNG ĐIỀU KHIỂN CỬA BẢO TRÌ BẰNG BLUETOOTH ---
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)), // Màu xanh nhạt chuyên nghiệp
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("MỞ KHÓA BẢO TRÌ (SERVO)", fontWeight = FontWeight.ExtraBold, color = Color(0xFF1565C0), fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (isDoorOpen) "Trạng thái: CỬA ĐANG MỞ 🔓" else "Trạng thái: ĐÃ KHÓA AN TOÀN 🔒",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isDoorOpen) Color(0xFFD32F2F) else Color(0xFF2E7D32)
+                        )
+                    }
+
+                    // Nút gạt Đóng/Mở
+                    Switch(
+                        checked = isDoorOpen,
+                        onCheckedChange = { open ->
+                            isDoorOpen = open
+                            // Gọi hàm truyền tín hiệu Bluetooth qua ViewModel
+                            viewModel.toggleMaintenanceDoor(open)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFFF44336), // Bật (Mở cửa) thì báo Đỏ nguy hiểm
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = Color(0xFF4CAF50)  // Tắt (Đóng cửa) thì báo Xanh an toàn
+                        )
+                    )
+                }
+            }
+        }
+        // ---------------------------------------------------
 
         if (notifications.isEmpty()) {
-            Box(Modifier.fillMaxSize(), Alignment.Center) {
-                Text("Không có thông báo nào", color = Color.Gray)
-            }
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(notifications) { notif ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (notif.isRead) Color.White else Color(0xFFFFF3F3)
-                        ),
-                        onClick = { viewModel.markRead(notif.id) }
-                    ) {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Warning, null,
-                                tint = if (notif.isRead) Color.Gray else Color(0xFFE74C3C)
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(notif.message, fontWeight = if (notif.isRead) FontWeight.Normal else FontWeight.Bold)
-                                Text(
-                                    SimpleDateFormat("dd/MM HH:mm", Locale("vi")).format(Date(notif.createdAt)),
-                                    fontSize = 12.sp, color = Color.Gray
-                                )
-                            }
-                        }
+            item { Text("Chưa có thông báo nào.", color = Color.Gray) }
+        }
+
+        items(notifications) { notif ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = if (notif.isRead) Color.White else Color(0xFFFFF3E0)),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text(text = "🚨 CẢNH BÁO", fontWeight = FontWeight.ExtraBold, color = Color(0xFFD32F2F), fontSize = 14.sp)
+                        Text(text = notif.machineName, fontSize = 12.sp, color = Color.Gray)
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = notif.message, fontSize = 15.sp, color = Color.Black)
                 }
             }
         }

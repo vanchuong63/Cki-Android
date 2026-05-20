@@ -121,7 +121,6 @@ class BluetoothViewModel @Inject constructor(
                     val res = sePayApi.getTransactions(
                         "Bearer $SEPAY_TOKEN", SEPAY_ACCOUNT, limit = 10
                     )
-
                     res.transactions.forEach { tx ->
                         Log.d("TX_DEBUG", "id=${tx.id} | amount=${tx.amountIn} | content=${tx.content} | date=${tx.date} | processed=${tx.id in processedTransactionIds}")
                     }
@@ -139,17 +138,21 @@ class BluetoothViewModel @Inject constructor(
                         Log.d("SePayLog", "TIỀN VỀ! ID: ${newTx.id} | ${newTx.amountIn}đ")
                         processedTransactionIds.add(newTx.id!!)
 
-                        // Lưu Supabase
-                        if (sessionManager.isLoggedIn) {
-                            viewModelScope.launch {
+                        // --- LUỒNG 1: XỬ LÝ DATABASE (Bất chấp Bluetooth có chạy hay không) ---
+                        viewModelScope.launch {
+                            // 1. Lưu lịch sử đơn hàng & Tích điểm
+                            if (sessionManager.isLoggedIn) {
                                 SupabaseRepository.saveOrder(
                                     uid = sessionManager.currentUid!!,
                                     productId = product.id,
                                     productName = product.name,
                                     price = product.price
-                                ).onSuccess { Log.d("Supabase", "Lưu đơn thành công: ${product.name}") }
-                                    .onFailure { Log.e("Supabase", "Lỗi lưu: ${it.message}") }
+                                )
                             }
+
+                            // 2. TRỪ KHO NGAY LẬP TỨC (Nằm chung luồng với việc lưu đơn)
+                            Log.d("KhoHang", "Tiền đã vào túi -> Ép trừ kho cho mã: ${product.id}")
+                            SupabaseRepository.decreaseStock(product.id.uppercase().trim())
                         }
 
                         // Gửi lệnh Bluetooth
@@ -163,6 +166,8 @@ class BluetoothViewModel @Inject constructor(
                             sent = bluetoothController.trySendMessage("$cleanId\n")
                             if (sent) {
                                 Log.d("BluetoothLog", "Gửi ESP32 thành công lần $attempt!")
+                                // TRỪ KHO HÀNG KHI MUA CÓ PHÍ
+                                SupabaseRepository.decreaseStock(product.id)
                                 break
                             }
                             Log.w("BluetoothLog", "Thất bại lần $attempt, thử lại...")
@@ -252,6 +257,8 @@ class BluetoothViewModel @Inject constructor(
                     sent = bluetoothController.trySendMessage("$cleanId\n")
                     if (sent) {
                         Log.d("BluetoothLog", "Gửi ESP32 thành công (miễn phí) lần $attempt!")
+                        // TRỪ KHO HÀNG KHI ĐƯỢC MIỄN PHÍ (ĐỔI QUÀ)
+                        SupabaseRepository.decreaseStock(product.id)
                         break
                     }
                     Log.w("BluetoothLog", "Thất bại lần $attempt, thử lại...")

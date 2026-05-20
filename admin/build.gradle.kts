@@ -13,7 +13,6 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        // SỬA Ở ĐÂY: Thêm applicationId vào
         applicationId = "com.example.admin"
         minSdk = 26
         targetSdk = 35
@@ -22,7 +21,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Bắt buộc phải có để Hilt và Compose chạy được
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -43,7 +41,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.navigation:navigation-compose:2.8.4")
 
     // Hilt
     implementation(libs.hilt.android)
@@ -64,6 +62,10 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.0")
+
+    // Serialization runtime
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
 
     // ── Supabase — version cố định tương thích Kotlin 2.0.x ──
     implementation("io.github.jan-tennert.supabase:postgrest-kt:2.5.4")

@@ -8,7 +8,7 @@ class AdminFcmService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         Log.d("FCM", "New token: $token")
-        // Sau này có thể lưu token này lên database để gửi thông báo
+        //  lưu token này lên database để gửi thông báo
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
