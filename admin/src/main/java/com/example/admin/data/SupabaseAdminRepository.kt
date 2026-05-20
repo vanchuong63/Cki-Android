@@ -1,5 +1,6 @@
 package com.example.admin.data
 
+import android.util.Log
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.coroutines.delay
@@ -54,14 +55,18 @@ object SupabaseAdminRepository {
         supabase.postgrest["machine_inventory"].upsert(inventory.copy(machineId = machineId))
     }
 
-    fun getInventoryFlow(machineId: String): Flow<List<MachineInventory>> = flow {
+    // lấy dl kho hàng
+    fun getInventoryFlow(): Flow<List<MachineInventory>> = flow {
         while (true) {
             runCatching {
-                supabase.postgrest["machine_inventory"]
-                    .select(Columns.ALL) { filter { eq("machine_id", machineId) } }
-                    .decodeList<MachineInventory>()
-            }.onSuccess { emit(it) }
-            delay(5000)
+                supabase.postgrest["machine_inventory"].select().decodeList<MachineInventory>()
+            }.onSuccess { list ->
+                emit(list.sortedBy { it.productId }) // Sắp xếp theo mã nước cho dễ quản lý
+            }.onFailure { error ->
+                Log.e("AdminRepo", "Lỗi tải dữ liệu kho: ${error.message}")
+                emit(emptyList())
+            }
+            delay(10000) // 10 giây cập nhật tình hình kho 1 lần
         }
     }
 
@@ -79,7 +84,12 @@ object SupabaseAdminRepository {
                         limit(50)
                     }
                     .decodeList<AdminNotification>()
-            }.onSuccess { emit(it) }
+            }.onSuccess { list ->
+                emit(list)
+            }.onFailure { error ->
+                Log.e("AdminThongBao", "❌ LỖI TẢI THÔNG BÁO TỪ MẠNG: ${error.message}", error)
+                emit(emptyList())
+            }
             delay(5000)
         }
     }
@@ -189,4 +199,5 @@ object SupabaseAdminRepository {
             delay(10000) // Cập nhật nhật ký mỗi 10 giây
         }
     }
+
 }

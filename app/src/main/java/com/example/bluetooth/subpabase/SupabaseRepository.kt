@@ -26,6 +26,11 @@ data class Order(
     val created_at: String? = null
 )
 
+@Serializable
+data class ProfileUpdate(
+    val points: Int,
+    val discount_type: String?
+)
 // ── Repository ───────────────────────────────────────────────
 
 object SupabaseRepository {
@@ -86,9 +91,12 @@ object SupabaseRepository {
                 val pointsToAdd = price / 1000
                 val newPoints = profile.points + pointsToAdd
                 Log.d("Supabase", "Tiến hành tích điểm: ${profile.points} -> $newPoints (+$pointsToAdd)")
-                
+
                 supabase.postgrest["users"].update(
-                    mapOf("points" to newPoints)
+                    ProfileUpdate(
+                        points = newPoints,
+                        discount_type = null // Tiêu thụ luôn ưu đãi nếu có
+                    )
                 ) { filter { eq("id", uid) } }
                 
                 Log.d("Supabase", "Đã cập nhật điểm vào Profile thành công")
@@ -127,11 +135,11 @@ object SupabaseRepository {
             
             val newPoints = profile.points - cost
             Log.d("Supabase", "Đổi quà: trừ $cost điểm, còn lại $newPoints")
-            
+
             supabase.postgrest["users"].update(
-                mapOf(
-                    "points" to newPoints,
-                    "discount_type" to discountType
+                ProfileUpdate(
+                    points = newPoints,
+                    discount_type = discountType
                 )
             ) { filter { eq("id", uid) } }
             
