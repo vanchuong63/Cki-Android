@@ -3,9 +3,13 @@ package com.example.admin.data
 import android.util.Log
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -51,26 +55,7 @@ object SupabaseAdminRepository {
 
     // ── INVENTORY ─────────────────────────────────────────────────────────────
     suspend fun updateInventory(machineId: String, inventory: MachineInventory): Result<MachineInventory> = runCatching {
-        val updatePayload = mapOf(
-            "quantity" to inventory.quantity,
-            "min_quantity" to inventory.minQuantity,
-            "product_name" to inventory.productName
-        )
-
-        runCatching {
-            supabase.postgrest["machine_inventory"].update(updatePayload) {
-                filter { eq("product_id", inventory.productId) }
-            }
-        }.recoverCatching {
-            supabase.postgrest["machine_inventory"].update(updatePayload) {
-                filter {
-                    eq("machine_id", machineId)
-                    eq("product_id", inventory.productId)
-                }
-            }
-        }.recoverCatching {
-            supabase.postgrest["machine_inventory"].upsert(inventory.copy(machineId = machineId))
-        }.getOrThrow()
+        patchInventoryQuantity(productId = inventory.productId, quantity = inventory.quantity)
 
         val updatedInventory = getInventoryByProductId(inventory.productId)
             ?: throw IllegalStateException("Khong tim thay san pham ${inventory.productId} sau khi cap nhat")
@@ -89,6 +74,44 @@ object SupabaseAdminRepository {
             .select(Columns.ALL) { filter { eq("product_id", productId) } }
             .decodeList<MachineInventory>()
             .firstOrNull()
+    }
+
+    private suspend fun patchInventoryQuantity(productId: String, quantity: Int) = withContext(Dispatchers.IO) {
+        val safeProductId = productId.trim().uppercase(Locale.US)
+        val url = URL("https://onjsgzthfxlvcuolfczb.supabase.co/rest/v1/machine_inventory?product_id=eq.$safeProductId")
+        val body = """{"quantity":$quantity}"""
+
+        val connection = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "PATCH"
+            connectTimeout = 15_000
+            readTimeout = 15_000
+            doOutput = true
+            setRequestProperty("apikey", "sb_publishable_wnKSk4-3-6tEaFhTj3_pJQ_Bcm6oELo")
+            setRequestProperty("Authorization", "Bearer sb_publishable_wnKSk4-3-6tEaFhTj3_pJQ_Bcm6oELo")
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Prefer", "return=representation")
+        }
+
+        connection.outputStream.use { output ->
+            output.write(body.toByteArray(Charsets.UTF_8))
+        }
+
+        val responseCode = connection.responseCode
+        val responseBody = if (responseCode in 200..299) {
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } else {
+            connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        }
+
+        connection.disconnect()
+
+        if (responseCode !in 200..299) {
+            throw IllegalStateException("Supabase update failed HTTP $responseCode: $responseBody")
+        }
+
+        if (responseBody == "[]" || responseBody.isBlank()) {
+            throw IllegalStateException("Khong co dong nao duoc cap nhat cho product_id=$safeProductId")
+        }
     }
 
     // lấy dl kho hàng
@@ -139,6 +162,15 @@ object SupabaseAdminRepository {
     }
 
     // ── STATS ORDERS (Đọc trực tiếp từ bảng orders chung của App User) ─────────
+    suspend fun saveAdminDeviceToken(token: String, deviceName: String): Result<Unit> = runCatching {
+        supabase.postgrest["admin_devices"].upsert(
+            AdminDevice(
+                token = token,
+                deviceName = deviceName
+            )
+        )
+    }
+
     fun getTodayOrdersFlow(): Flow<Int> = flow {
         while (true) {
             runCatching {

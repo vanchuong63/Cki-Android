@@ -165,6 +165,7 @@ class AdminViewModel @Inject constructor(
                             if (item.productId == updatedInventory.productId) updatedInventory else item
                         }
                     }
+                    _addMachineState.value = "Da nap day ${updatedInventory.productName}: ${updatedInventory.quantity}/2"
                     if (updatedInventory.quantity <= updatedInventory.minQuantity) {
                         sendLowStockNotification(machineId, updatedInventory)
                     }

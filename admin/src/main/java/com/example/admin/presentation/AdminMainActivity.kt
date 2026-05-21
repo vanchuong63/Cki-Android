@@ -44,8 +44,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.admin.R
+import com.example.admin.AdminApplication
 import com.example.admin.data.AdminNotification
+import com.example.admin.data.SupabaseAdminRepository
+import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class AdminMainActivity : ComponentActivity() {
@@ -109,6 +113,16 @@ fun AdminApp(isBluetoothEnabled: Boolean, bluetoothAdapter: BluetoothAdapter?) {
             add(Manifest.permission.ACCESS_FINE_LOCATION)
         }.toTypedArray()
         permissionLauncher.launch(permissions)
+
+        FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { token ->
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    SupabaseAdminRepository.saveAdminDeviceToken(
+                        token = token,
+                        deviceName = Build.MODEL ?: "Android Admin"
+                    )
+                }
+            }
     }
 
     LaunchedEffect(notifications) {
@@ -174,7 +188,7 @@ fun AdminApp(isBluetoothEnabled: Boolean, bluetoothAdapter: BluetoothAdapter?) {
     }
 }
 
-private const val LOW_STOCK_CHANNEL_ID = "low_stock_alerts"
+private const val LOW_STOCK_CHANNEL_ID = AdminApplication.LOW_STOCK_CHANNEL_ID
 
 private fun notificationKey(notification: AdminNotification): String =
     notification.id ?: "${notification.machineId}|${notification.message}|${notification.createdAt}"

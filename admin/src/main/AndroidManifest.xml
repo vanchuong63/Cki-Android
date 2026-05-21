@@ -34,6 +34,14 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDiDTt0er5dqHJpZ9qD3Zsm6quiZcdw7iM" />
 
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="fcm_low_stock_alerts" />
+
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_launcher_foreground" />
+
         <!-- FCM -->
         <service
             android:name=".service.AdminFcmService"

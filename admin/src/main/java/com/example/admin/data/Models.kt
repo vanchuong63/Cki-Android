@@ -32,6 +32,14 @@ data class AdminNotification(
     @SerialName("is_read") val isRead: Boolean = false,
     @SerialName("created_at") val createdAt: String? = null
 )
+
+@Serializable
+data class AdminDevice(
+    val token: String,
+    @SerialName("device_name") val deviceName: String = "",
+    @SerialName("updated_at") val updatedAt: String? = null
+)
+
 @Serializable
 data class Order(
     val id: String = "",

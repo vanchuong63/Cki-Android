@@ -1,4 +1,4 @@
-package com.example.admin.presentation // Nhớ giữ nguyên package của bạn
+package com.example.admin.presentation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -64,9 +64,9 @@ fun NotificationScreen(viewModel: AdminViewModel) {
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFFF44336), // Bật (Mở cửa) thì báo Đỏ nguy hiểm
+                            checkedTrackColor = Color(0xFFF44336),
                             uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = Color(0xFF4CAF50)  // Tắt (Đóng cửa) thì báo Xanh an toàn
+                            uncheckedTrackColor = Color(0xFF4CAF50)
                         )
                     )
                 }
