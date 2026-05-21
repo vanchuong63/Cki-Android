@@ -199,10 +199,10 @@ private fun showAdminSystemNotification(context: Context, notification: AdminNot
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         val channel = NotificationChannel(
             LOW_STOCK_CHANNEL_ID,
-            "Canh bao kho hang",
+            "Cảnh báo kho hàng",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Thong bao khi san pham sap het hoac da het hang"
+            description = "Thông báo khi sản phẩm sắp hết hoặc đã hết hàng"
         }
         manager.createNotificationChannel(channel)
     }
@@ -216,7 +216,7 @@ private fun showAdminSystemNotification(context: Context, notification: AdminNot
 
     val builtNotification = builder
         .setSmallIcon(R.drawable.ic_launcher_foreground)
-        .setContentTitle("Canh bao het hang")
+        .setContentTitle("Cảnh báo hết hàng")
         .setContentText(notification.message)
         .setStyle(Notification.BigTextStyle().bigText(notification.message))
         .setAutoCancel(true)

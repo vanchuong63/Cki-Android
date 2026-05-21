@@ -21,10 +21,10 @@ class AdminApplication : Application() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
             LOW_STOCK_CHANNEL_ID,
-            "Canh bao kho hang",
+            "Cảnh báo kho hàng",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Thong bao khi san pham sap het hoac da het hang"
+            description = "Thông báo khi sản phẩm sắp hết hoặc đã hết hàng"
         }
 
         manager.createNotificationChannel(channel)

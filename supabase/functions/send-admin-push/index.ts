@@ -36,8 +36,8 @@ Deno.serve(async (req) => {
   });
 
   const record = payload.record;
-  const message = record?.message ?? "San pham da het hang";
-  const title = "Canh bao kho hang";
+  const message = record?.message ?? "Sản phẩm đã hết hàng";
+  const title = "Cảnh báo kho hàng";
 
   const { data: devices, error } = await supabase
     .from("admin_devices")

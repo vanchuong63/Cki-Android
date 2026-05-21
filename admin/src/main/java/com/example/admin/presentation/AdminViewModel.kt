@@ -165,14 +165,14 @@ class AdminViewModel @Inject constructor(
                             if (item.productId == updatedInventory.productId) updatedInventory else item
                         }
                     }
-                    _addMachineState.value = "Da nap day ${updatedInventory.productName}: ${updatedInventory.quantity}/2"
+                    _addMachineState.value = "Đã nạp đầy ${updatedInventory.productName}: ${updatedInventory.quantity}/2"
                     if (updatedInventory.quantity <= updatedInventory.minQuantity) {
                         sendLowStockNotification(machineId, updatedInventory)
                     }
                 }
                 .onFailure { error ->
-                    Log.e("AdminInventory", "Cap nhat kho that bai: ${error.message}", error)
-                    _addMachineState.value = "Loi cap nhat kho: ${error.message}"
+                    Log.e("AdminInventory", "Cập nhật kho thất bại: ${error.message}", error)
+                    _addMachineState.value = "Lỗi cập nhật kho: ${error.message}"
                 }
         }
     }

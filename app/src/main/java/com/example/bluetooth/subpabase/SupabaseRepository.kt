@@ -192,7 +192,7 @@ object SupabaseRepository {
                 Result.success(Unit)
             }
         } catch (e: Exception) {
-            Log.e("Supabase", "Loi tru kho cho $productId: ${e.message}", e)
+            Log.e("Supabase", "Lỗi trừ kho cho $productId: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -200,15 +200,15 @@ object SupabaseRepository {
     private suspend fun sendOutOfStockNotification(inventory: MachineInventory) {
         val machineId = inventory.machineId.ifBlank { "M01" }
         val message = if (inventory.quantity <= 0) {
-            "${inventory.productName} da het hang"
+            "${inventory.productName} đã hết hàng"
         } else {
-            "${inventory.productName} sap het hang, con ${inventory.quantity} chai"
+            "${inventory.productName} sắp hết hàng, còn ${inventory.quantity} chai"
         }
 
         supabase.postgrest["notifications"].insert(
             NotificationInsert(
                 machineId = machineId,
-                machineName = "May $machineId",
+                machineName = "Máy $machineId",
                 message = message,
                 isRead = false
             )

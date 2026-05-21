@@ -1,12 +1,29 @@
 package com.example.admin.presentation
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,49 +34,65 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun NotificationScreen(viewModel: AdminViewModel) {
     val notifications by viewModel.notifications.collectAsState()
-
-    // Biến trạng thái để giao diện biết cửa đang đóng hay mở
     var isDoorOpen by remember { mutableStateOf(false) }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFF0F2F8)),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF0F2F8)),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("Thông báo hệ thống", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E2D60), modifier = Modifier.padding(bottom = 8.dp))
+            Text(
+                text = "Thông báo hệ thống",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1E2D60),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
         }
 
-        // --- BẢNG ĐIỀU KHIỂN CỬA BẢO TRÌ BẰNG BLUETOOTH ---
         item {
             Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)), // Màu xanh nhạt chuyên nghiệp
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)),
                 shape = RoundedCornerShape(12.dp),
                 elevation = CardDefaults.cardElevation(4.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text("MỞ KHÓA BẢO TRÌ (SERVO)", fontWeight = FontWeight.ExtraBold, color = Color(0xFF1565C0), fontSize = 14.sp)
+                        Text(
+                            text = "MỞ KHÓA BẢO TRÌ (SERVO)",
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF1565C0),
+                            fontSize = 14.sp
+                        )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = if (isDoorOpen) "Trạng thái: CỬA ĐANG MỞ 🔓" else "Trạng thái: ĐÃ KHÓA AN TOÀN 🔒",
+                            text = if (isDoorOpen) {
+                                "Trạng thái: CỬA ĐANG MỞ"
+                            } else {
+                                "Trạng thái: ĐÃ KHÓA AN TOÀN"
+                            },
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = if (isDoorOpen) Color(0xFFD32F2F) else Color(0xFF2E7D32)
                         )
                     }
 
-                    // Nút gạt Đóng/Mở
                     Switch(
                         checked = isDoorOpen,
                         onCheckedChange = { open ->
                             isDoorOpen = open
-                            // Gọi hàm truyền tín hiệu Bluetooth qua ViewModel
                             viewModel.toggleMaintenanceDoor(open)
                         },
                         colors = SwitchDefaults.colors(
@@ -72,22 +105,33 @@ fun NotificationScreen(viewModel: AdminViewModel) {
                 }
             }
         }
-        // ---------------------------------------------------
 
         if (notifications.isEmpty()) {
-            item { Text("Chưa có thông báo nào.", color = Color.Gray) }
+            item {
+                Text("Chưa có thông báo nào.", color = Color.Gray)
+            }
         }
 
         items(notifications) { notif ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = if (notif.isRead) Color.White else Color(0xFFFFF3E0)),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (notif.isRead) Color.White else Color(0xFFFFF3E0)
+                ),
                 shape = RoundedCornerShape(12.dp),
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text(text = "🚨 CẢNH BÁO", fontWeight = FontWeight.ExtraBold, color = Color(0xFFD32F2F), fontSize = 14.sp)
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "CẢNH BÁO",
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFD32F2F),
+                            fontSize = 14.sp
+                        )
                         Text(text = notif.machineName, fontSize = 12.sp, color = Color.Gray)
                     }
                     Spacer(modifier = Modifier.height(8.dp))

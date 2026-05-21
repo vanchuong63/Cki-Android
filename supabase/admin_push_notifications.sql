@@ -34,10 +34,10 @@ begin
     insert into public.notifications(machine_id, machine_name, message, is_read)
     values (
       coalesce(new.machine_id, 'M01'),
-      'May ' || coalesce(new.machine_id, 'M01'),
+      'Máy ' || coalesce(new.machine_id, 'M01'),
       case
-        when new.quantity <= 0 then new.product_name || ' da het hang'
-        else new.product_name || ' sap het hang, con ' || new.quantity || ' chai'
+        when new.quantity <= 0 then new.product_name || ' đã hết hàng'
+        else new.product_name || ' sắp hết hàng, còn ' || new.quantity || ' chai'
       end,
       false
     );

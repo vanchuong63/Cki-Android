@@ -26,7 +26,7 @@ class AdminFcmService : FirebaseMessagingService() {
                 token = token,
                 deviceName = Build.MODEL ?: "Android Admin"
             ).onFailure {
-                Log.e("FCM", "Khong luu duoc FCM token: ${it.message}", it)
+                Log.e("FCM", "Không lưu được FCM token: ${it.message}", it)
             }
         }
     }
@@ -47,7 +47,7 @@ class AdminFcmService : FirebaseMessagingService() {
             manager.createNotificationChannel(
                 NotificationChannel(
                     channelId,
-                    "Canh bao kho hang",
+                    "Cảnh báo hết hàng",
                     NotificationManager.IMPORTANCE_HIGH
                 )
             )
