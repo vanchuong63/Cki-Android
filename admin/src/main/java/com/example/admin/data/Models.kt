@@ -5,7 +5,7 @@ import kotlinx.serialization.SerialName
 
 @Serializable
 data class Machine(
-    val id: String = "",
+    val id: String? = null,
     val name: String = "",
     val location: String = "",
     val lat: Double = 0.0,

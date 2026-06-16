@@ -1,6 +1,9 @@
 package com.example.admin.presentation
 
 import android.annotation.SuppressLint
+import android.location.Geocoder
+import android.os.Build
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -61,7 +65,10 @@ import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -187,9 +194,41 @@ fun AddMachineDialog(
     var location by remember { mutableStateOf("") }
     var latStr by remember { mutableStateOf("") }
     var lngStr by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     val context = LocalContext.current
     val fusedLocation = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    // Hàm lấy tên địa chỉ từ tọa độ chạy ngầm
+    fun fetchAddress(lat: Double, lng: Double) {
+        latStr = lat.toString()
+        lngStr = lng.toString()
+        
+        scope.launch(Dispatchers.IO) {
+            try {
+                val geocoder = Geocoder(context, Locale.getDefault())
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    geocoder.getFromLocation(lat, lng, 1) { addresses ->
+                        if (addresses.isNotEmpty()) {
+                            location = addresses[0].getAddressLine(0) ?: ""
+                        }
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    val addresses = geocoder.getFromLocation(lat, lng, 1)
+                    if (!addresses.isNullOrEmpty()) {
+                        withContext(Dispatchers.Main) {
+                            location = addresses[0].getAddressLine(0) ?: ""
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Không lấy được tên đường, vui lòng nhập tay", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -230,11 +269,26 @@ fun AddMachineDialog(
                 Spacer(Modifier.padding(4.dp))
                 OutlinedButton(
                     onClick = {
-                        fusedLocation.lastLocation.addOnSuccessListener { loc ->
-                            loc?.let {
-                                latStr = it.latitude.toString()
-                                lngStr = it.longitude.toString()
+                        try {
+                            fusedLocation.lastLocation.addOnSuccessListener { loc ->
+                                if (loc != null) {
+                                    fetchAddress(loc.latitude, loc.longitude)
+                                    Toast.makeText(context, "Đã cập nhật vị trí!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Đang lấy vị trí mới...", Toast.LENGTH_SHORT).show()
+                                    fusedLocation.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                                        .addOnSuccessListener { newLoc ->
+                                            if (newLoc != null) {
+                                                fetchAddress(newLoc.latitude, newLoc.longitude)
+                                                Toast.makeText(context, "Đã lấy được vị trí!", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                Toast.makeText(context, "Không thể lấy vị trí. Hãy bật GPS!", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                }
                             }
+                        } catch (e: SecurityException) {
+                            Toast.makeText(context, "Thiếu quyền truy cập vị trí", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
