@@ -37,8 +37,32 @@ class AdminViewModel @Inject constructor(
         state.copy(scannedDevices = scannedDevices, pairedDevices = pairedDevices)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), _state.value)
 
+    // ── 1. Khai báo Inventory State trước ─────────────────────────────────────
+    private val _inventoryState = MutableStateFlow<List<MachineInventory>>(emptyList())
+    val inventoryState = _inventoryState.asStateFlow()
+
+    // ── 2. Khai báo Notifications sử dụng Inventory State ─────────────────────
+    private val rawNotifications = SupabaseAdminRepository.getNotificationsFlow()
+
+    val notifications = combine(rawNotifications, _inventoryState) { notifs, inventory ->
+        notifs.filter { notif ->
+            val machineInv = inventory.filter { it.machineId == notif.machineId }
+            if (machineInv.isEmpty()) return@filter true
+
+            val mentionedProduct = machineInv.find { notif.message.contains(it.productName, ignoreCase = true) }
+            if (mentionedProduct != null) {
+                mentionedProduct.quantity <= mentionedProduct.minQuantity
+            } else {
+                machineInv.any { it.quantity <= it.minQuantity }
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val unreadCount = notifications.map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     init {
-        // 1. Luồng tự động quét thiết bị: Kiểm tra trực tiếp từ _state gốc để tránh trễ dữ liệu
+        // Luồng tự động quét thiết bị Bluetooth
         viewModelScope.launch {
             while (true) {
                 val s = _state.value
@@ -49,11 +73,11 @@ class AdminViewModel @Inject constructor(
                 } else {
                     stopScan()
                 }
-                delay(15000) // Tăng thời gian chờ để ổn định kết nối
+                delay(15000)
             }
         }
 
-        // 2. Tự động kết nối: Chỉ gọi khi thực sự chưa kết nối
+        // Tự động kết nối Bluetooth
         bluetoothController.scannedDevice
             .onEach { devices ->
                 val target = devices.find {
@@ -61,17 +85,29 @@ class AdminViewModel @Inject constructor(
                 }
                 val s = _state.value
                 if (target != null && !s.isConnected && !s.isConnecting) {
-                    Log.d("AdminBluetooth", "Đã thấy ESP32, đang tiến hành kết nối...")
                     connectToDevice(target)
                 }
             }.launchIn(viewModelScope)
+
+        // Theo dõi kho hàng và dọn dẹp thông báo
+        SupabaseAdminRepository.getInventoryFlow()
+            .onEach { remoteInventory ->
+                _inventoryState.value = remoteInventory
+                remoteInventory.groupBy { it.machineId }.forEach { (mId, items) ->
+                    if (items.all { it.quantity > it.minQuantity }) {
+                        viewModelScope.launch {
+                            SupabaseAdminRepository.markAllMachineNotificationsRead(mId)
+                        }
+                    }
+                }
+            }
+            .launchIn(viewModelScope)
     }
 
+    // ── Các hàm xử lý ──────────────────────────────────────────────────────────
     fun connectToDevice(device: BluetoothDeviceDomain) {
-        // Nếu đang kết nối đúng thiết bị rồi thì không làm gì cả
         if (_state.value.isConnecting && lastConnectedDevice?.address == device.address) return
-        
-        connectionJob?.cancel() // Hủy bỏ tiến trình kết nối cũ nếu đang chạy
+        connectionJob?.cancel()
         lastConnectedDevice = device
         _state.update { it.copy(isConnecting = true) }
         
@@ -80,12 +116,10 @@ class AdminViewModel @Inject constructor(
                 when (result) {
                     is ConnectionResult.ConnectionEstablished -> {
                         _state.update { it.copy(isConnected = true, isConnecting = false) }
-                        Log.d("AdminBluetooth", "✅ KẾT NỐI THÀNH CÔNG!")
                         stopScan()
                     }
                     is ConnectionResult.Error -> {
                         _state.update { it.copy(isConnected = false, isConnecting = false) }
-                        Log.e("AdminBluetooth", "❌ Lỗi kết nối: ${result.message}")
                     }
                 }
             }.launchIn(viewModelScope)
@@ -94,49 +128,13 @@ class AdminViewModel @Inject constructor(
     fun startScan() = bluetoothController.startDiscovery()
     fun stopScan() = bluetoothController.stopDiscovery()
 
-    // ── Stats ──────────────────────────────────────────────────────────────────
-    val todayOrders = SupabaseAdminRepository.getTodayOrdersFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    val todayRevenue = SupabaseAdminRepository.getTodayRevenueFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
-
-    val totalRevenue = com.example.admin.data.SupabaseAdminRepository.getTotalRevenueFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
-
-    val totalOrdersCount = com.example.admin.data.SupabaseAdminRepository.getTotalOrdersCountFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    val monthlyRevenue = com.example.admin.data.SupabaseAdminRepository.getMonthlyRevenueFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
-
-    val recentOrders = com.example.admin.data.SupabaseAdminRepository.getRecentOrdersFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // ── Machines ───────────────────────────────────────────────────────────────
-    val machines = SupabaseAdminRepository.getMachinesFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // ── Notifications ──────────────────────────────────────────────────────────
-    val notifications = SupabaseAdminRepository.getNotificationsFlow()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val notificationState = notifications
-
-    val unreadCount = notifications.map { list ->
-        list.count { !it.isRead }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    private val _inventoryState = MutableStateFlow<List<MachineInventory>>(emptyList())
-    val inventoryState = _inventoryState.asStateFlow()
-
-    init {
-        SupabaseAdminRepository.getInventoryFlow()
-            .onEach { remoteInventory ->
-                _inventoryState.value = remoteInventory
-            }
-            .launchIn(viewModelScope)
-    }
+    val todayOrders = SupabaseAdminRepository.getTodayOrdersFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val todayRevenue = SupabaseAdminRepository.getTodayRevenueFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+    val totalRevenue = SupabaseAdminRepository.getTotalRevenueFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+    val totalOrdersCount = SupabaseAdminRepository.getTotalOrdersCountFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val monthlyRevenue = SupabaseAdminRepository.getMonthlyRevenueFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+    val recentOrders = SupabaseAdminRepository.getRecentOrdersFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val machines = SupabaseAdminRepository.getMachinesFlow().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _addMachineState = MutableStateFlow<String?>(null)
     val addMachineState = _addMachineState.asStateFlow()
@@ -161,35 +159,13 @@ class AdminViewModel @Inject constructor(
             SupabaseAdminRepository.updateInventory(machineId, inventory)
                 .onSuccess { updatedInventory ->
                     _inventoryState.update { current ->
-                        current.map { item ->
-                            if (item.productId == updatedInventory.productId) updatedInventory else item
-                        }
+                        current.map { if (it.productId == updatedInventory.productId) updatedInventory else it }
                     }
-                    _addMachineState.value = "Đã nạp đầy ${updatedInventory.productName}: ${updatedInventory.quantity}/2"
-                    
                     if (updatedInventory.quantity > updatedInventory.minQuantity) {
-                        // Nếu đã nạp đủ hàng, tự động đánh dấu các cảnh báo cũ của máy này là đã đọc trên Supabase
                         SupabaseAdminRepository.markAllMachineNotificationsRead(machineId)
-                    } else {
-                        // Chỉ gửi cảnh báo mới nếu hàng thực sự thấp
-                        sendLowStockNotification(machineId, updatedInventory)
                     }
-                }
-                .onFailure { error ->
-                    Log.e("AdminInventory", "Cập nhật kho thất bại: ${error.message}", error)
-                    _addMachineState.value = "Lỗi cập nhật kho: ${error.message}"
                 }
         }
-    }
-
-    private suspend fun sendLowStockNotification(machineId: String, inventory: MachineInventory) {
-        val machine = machines.value.find { it.id == machineId } ?: return
-        val notif = AdminNotification(
-            machineId = machineId,
-            machineName = machine.name,
-            message = "⚠️ ${machine.name}: ${inventory.productName} còn ${inventory.quantity} chai!",
-        )
-        SupabaseAdminRepository.addNotification(notif)
     }
 
     fun markRead(id: String) {
@@ -197,13 +173,9 @@ class AdminViewModel @Inject constructor(
     }
 
     fun clearAddState() { _addMachineState.value = null }
-
     fun toggleMaintenanceDoor(isOpen: Boolean) {
         viewModelScope.launch {
-            val cmd = if (isOpen) "OPEN_DOOR\n" else "CLOSE_DOOR\n"
-            Log.d("AdminBluetooth", "Gửi lệnh: $cmd")
-            val sent = bluetoothController.trySendMessage(cmd)
-            if (!sent) Log.e("AdminBluetooth", "Lỗi: Không gửi được lệnh. BT chưa kết nối.")
+            bluetoothController.trySendMessage(if (isOpen) "OPEN_DOOR\n" else "CLOSE_DOOR\n")
         }
     }
 }
