@@ -25,6 +25,12 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Bluetooth">
+
+        <!-- Google Maps API Key - THIẾU CÁI NÀY SẼ GÂY CRASH -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyDiDTt0er5dqHJpZ9qD3Zsm6quiZcdw7iM" />
+
         <activity
             android:name=".presentation.MainActivity"
             android:exported="true"

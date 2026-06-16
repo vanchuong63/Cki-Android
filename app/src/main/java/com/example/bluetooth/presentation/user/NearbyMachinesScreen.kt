@@ -5,185 +5,231 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationManager
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-
-private const val VENDING_MACHINE_QUERY = "máy bán nước tự động"
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NearbyMachinesScreen() {
+fun NearbyMachinesScreen(viewModel: UserViewModel) {
     val context = LocalContext.current
+    val state by viewModel.state.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    val cameraState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(16.0544, 108.2022), 13f)
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-
-        if (granted) {
-            openNearbyMachineSearch(context)
-        } else {
-            Toast.makeText(context, "Cần quyền vị trí để tìm máy gần bạn", Toast.LENGTH_LONG).show()
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (!granted) {
+            Toast.makeText(context, "Cần quyền vị trí để hiển thị bản đồ tốt hơn", Toast.LENGTH_LONG).show()
         }
     }
 
-    val onSearchNearby = remember(context) {
-        {
-            if (hasLocationPermission(context)) {
-                openNearbyMachineSearch(context)
-            } else {
-                permissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION
-                    )
+    LaunchedEffect(Unit) {
+        if (!hasLocationPermission(context)) {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
                 )
-            }
+            )
         }
+        viewModel.loadMachines()
     }
 
     Scaffold(
-        containerColor = Color(0xFFF8F9FA),
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(
-                        text = "Tìm máy bán nước",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
+                    Text("Tìm máy bán nước", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.White
+                ),
+                actions = {
+                    IconButton(onClick = { viewModel.loadMachines() }) {
+                        Icon(Icons.Default.LocationOn, contentDescription = "Refresh")
+                    }
                 }
             )
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxSize()
                 .padding(padding)
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxSize()
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraState,
+                properties = MapProperties(
+                    isMyLocationEnabled = hasLocationPermission(context)
+                ),
+                uiSettings = MapUiSettings(zoomControlsEnabled = false, myLocationButtonEnabled = true)
             ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Surface(
-                        modifier = Modifier.size(72.dp),
-                        shape = CircleShape,
-                        color = Color(0xFFE8F7FD)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            modifier = Modifier.padding(16.dp),
-                            tint = Color(0xFF00AEEF)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    Text(
-                        text = "Máy bán nước gần đây",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color(0xFF1C1E23),
-                        textAlign = TextAlign.Center
+                state.machines.forEach { machine ->
+                    Marker(
+                        state = MarkerState(LatLng(machine.lat, machine.lng)),
+                        title = machine.name,
+                        snippet = machine.location,
+                        icon = BitmapDescriptorFactory.defaultMarker(
+                            if (machine.isOnline) BitmapDescriptorFactory.HUE_AZURE
+                            else BitmapDescriptorFactory.HUE_RED
+                        ),
+                        onClick = {
+                            scope.launch {
+                                cameraState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(machine.lat, machine.lng), 15f))
+                            }
+                            false
+                        }
                     )
-                    Text(
-                        text = "Mở Google Maps để chọn điểm gần nhất và bắt đầu chỉ đường.",
-                        modifier = Modifier.padding(top = 8.dp),
-                        fontSize = 14.sp,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 20.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Button(
-                        onClick = onSearchNearby,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00AEEF))
-                    ) {
-                        Icon(Icons.Default.Navigation, contentDescription = null)
-                        Spacer(modifier = Modifier.size(10.dp))
-                        Text("Tìm và dẫn đường", fontWeight = FontWeight.Bold)
-                    }
                 }
             }
 
-            Row(
+            // Danh sách máy ở dưới
+            Column(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(Color.White, RoundedCornerShape(14.dp))
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Map,
-                    contentDescription = null,
-                    tint = Color(0xFF00AEEF)
-                )
-                Text(
-                    text = "Kết quả sẽ mở bằng Google Maps hoặc trình duyệt bản đồ trên máy.",
-                    modifier = Modifier.padding(start = 12.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF4A5568)
-                )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(state.machines) { machine ->
+                        MachineCard(
+                            machine = machine,
+                            onClick = {
+                                scope.launch {
+                                    cameraState.animate(
+                                        CameraUpdateFactory.newLatLngZoom(
+                                            LatLng(machine.lat, machine.lng), 16f
+                                        )
+                                    )
+                                }
+                            },
+                            onNavigate = {
+                                openGoogleMapsNavigation(context, machine.lat, machine.lng)
+                            }
+                        )
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+fun MachineCard(
+    machine: com.example.bluetooth.subpabase.Machine,
+    onClick: () -> Unit,
+    onNavigate: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .width(280.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(8.dp)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.LocalDrink, null,
+                    tint = if (machine.isOnline) Color(0xFF00AEEF) else Color.Gray,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        machine.name,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        if (machine.isOnline) "● Đang hoạt động" else "● Bảo trì",
+                        fontSize = 12.sp,
+                        color = if (machine.isOnline) Color(0xFF27AE60) else Color.Gray
+                    )
+                }
+                IconButton(onClick = onNavigate) {
+                    Icon(
+                        Icons.Default.Navigation,
+                        contentDescription = "Chỉ đường",
+                        tint = Color(0xFF00AEEF)
+                    )
+                }
+            }
+            Spacer(Modifier.padding(vertical = 4.dp))
+            Text(
+                machine.location,
+                fontSize = 13.sp,
+                color = Color.DarkGray,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -193,50 +239,20 @@ private fun hasLocationPermission(context: Context): Boolean {
         context,
         Manifest.permission.ACCESS_FINE_LOCATION
     ) == PackageManager.PERMISSION_GRANTED ||
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
 }
 
-private fun openNearbyMachineSearch(context: Context) {
-    val location = if (hasLocationPermission(context)) {
-        findLastKnownLocation(context)
-    } else {
-        null
-    }
-
-    val mapsUri = if (location != null) {
-        Uri.parse(
-            "geo:${location.latitude},${location.longitude}?q=${Uri.encode(VENDING_MACHINE_QUERY)}"
-        )
-    } else {
-        Uri.parse("geo:0,0?q=${Uri.encode("$VENDING_MACHINE_QUERY gần đây")}")
-    }
-
-    val mapsIntent = Intent(Intent.ACTION_VIEW, mapsUri).apply {
-        setPackage("com.google.android.apps.maps")
-    }
-
+private fun openGoogleMapsNavigation(context: Context, lat: Double, lng: Double) {
+    val gmmIntentUri = Uri.parse("google.navigation:q=$lat,$lng")
+    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+    mapIntent.setPackage("com.google.android.apps.maps")
     try {
-        context.startActivity(mapsIntent)
+        context.startActivity(mapIntent)
     } catch (e: ActivityNotFoundException) {
-        val fallbackUri = Uri.parse(
-            "https://www.google.com/maps/search/?api=1&query=${Uri.encode("$VENDING_MACHINE_QUERY gần đây")}"
-        )
-        context.startActivity(Intent(Intent.ACTION_VIEW, fallbackUri))
-    }
-}
-
-private fun findLastKnownLocation(context: Context): Location? {
-    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-        ?: return null
-
-    return try {
-        locationManager.getProviders(true)
-            .mapNotNull { provider -> locationManager.getLastKnownLocation(provider) }
-            .maxByOrNull { location -> location.time }
-    } catch (e: SecurityException) {
-        null
+        val webUri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lng")
+        context.startActivity(Intent(Intent.ACTION_VIEW, webUri))
     }
 }

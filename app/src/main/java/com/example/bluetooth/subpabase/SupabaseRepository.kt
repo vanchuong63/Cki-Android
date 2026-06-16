@@ -51,9 +51,34 @@ data class NotificationInsert(
     val message: String,
     @SerialName("is_read") val isRead: Boolean = false
 )
+
+@Serializable
+data class Machine(
+    val id: String? = null,
+    val name: String = "",
+    val location: String = "",
+    val lat: Double = 0.0,
+    val lng: Double = 0.0,
+    @SerialName("is_online") val isOnline: Boolean = true,
+    @SerialName("created_at") val createdAt: String? = null
+)
+
 // ── Repository ───────────────────────────────────────────────
 
 object SupabaseRepository {
+
+    // Lấy danh sách máy từ database (Admin đã thêm)
+    suspend fun getMachines(): Result<List<Machine>> {
+        return try {
+            val result = supabase.postgrest["machines"]
+                .select(Columns.ALL)
+                .decodeList<Machine>()
+            Result.success(result)
+        } catch (e: Exception) {
+            Log.e("Supabase", "Lỗi lấy danh sách máy: ${e.message}")
+            Result.failure(e)
+        }
+    }
 
     // Tạo profile user sau khi đăng ký Firebase thành công
     suspend fun createUserProfile(uid: String, phone: String, email: String): Result<Unit> {

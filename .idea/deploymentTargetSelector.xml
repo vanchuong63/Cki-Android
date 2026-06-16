@@ -15,10 +15,10 @@
       </SelectionState>
       <SelectionState runConfigName="admin">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-06-16T14:03:03.180142700Z">
+        <DropdownSelection timestamp="2026-06-16T15:03:03.146599500Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\thuyd\.android\avd\Medium_Phone.avd" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=52f89a19" />
             </handle>
           </Target>
         </DropdownSelection>
