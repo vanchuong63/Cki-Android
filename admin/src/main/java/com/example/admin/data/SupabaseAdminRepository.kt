@@ -147,7 +147,7 @@ object SupabaseAdminRepository {
                 emit(list)
             }.onFailure { error ->
                 Log.e("AdminThongBao", "❌ LỖI TẢI THÔNG BÁO TỪ MẠNG: ${error.message}", error)
-                emit(emptyList())
+                // Đừng emit danh sách trống ở đây để tránh lỗi flicker UI gây hiện thông báo giả
             }
             delay(5000)
         }
@@ -157,6 +157,17 @@ object SupabaseAdminRepository {
         runCatching {
             supabase.postgrest["notifications"].update(mapOf("is_read" to true)) {
                 filter { eq("id", id) }
+            }
+        }
+    }
+
+    suspend fun markAllMachineNotificationsRead(machineId: String) {
+        runCatching {
+            supabase.postgrest["notifications"].update(mapOf("is_read" to true)) {
+                filter { 
+                    eq("machine_id", machineId)
+                    eq("is_read", false)
+                }
             }
         }
     }

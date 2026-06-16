@@ -166,7 +166,12 @@ class AdminViewModel @Inject constructor(
                         }
                     }
                     _addMachineState.value = "Đã nạp đầy ${updatedInventory.productName}: ${updatedInventory.quantity}/2"
-                    if (updatedInventory.quantity <= updatedInventory.minQuantity) {
+                    
+                    if (updatedInventory.quantity > updatedInventory.minQuantity) {
+                        // Nếu đã nạp đủ hàng, tự động đánh dấu các cảnh báo cũ của máy này là đã đọc trên Supabase
+                        SupabaseAdminRepository.markAllMachineNotificationsRead(machineId)
+                    } else {
+                        // Chỉ gửi cảnh báo mới nếu hàng thực sự thấp
                         sendLowStockNotification(machineId, updatedInventory)
                     }
                 }
