@@ -225,7 +225,7 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable("nearby") {
-                                NearbyMachinesScreen()
+                                NearbyMachinesScreen(userViewModel)
                             }
 
                             composable("history") {

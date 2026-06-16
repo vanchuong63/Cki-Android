@@ -2,6 +2,7 @@ package com.example.bluetooth.presentation.user
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.bluetooth.subpabase.Machine
 import com.example.bluetooth.subpabase.Order
 import com.example.bluetooth.subpabase.SessionManager
 import com.example.bluetooth.subpabase.SupabaseRepository
@@ -16,6 +17,7 @@ import javax.inject.Inject
 data class UserUiState(
     val profile: UserProfile? = null,
     val orders: List<Order> = emptyList(),
+    val machines: List<Machine> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val message: String? = null
@@ -31,7 +33,10 @@ class UserViewModel @Inject constructor(
 
     val isGuest: Boolean get() = session.isGuest
 
-    init { loadData() }
+    init {
+        loadData()
+        loadMachines()
+    }
 
     fun loadData() {
         if (session.isGuest) return
@@ -45,6 +50,18 @@ class UserViewModel @Inject constructor(
                 .onSuccess { _state.value = _state.value.copy(orders = it) }
                 .onFailure { _state.value = _state.value.copy(error = "Không tải được lịch sử") }
             _state.value = _state.value.copy(isLoading = false)
+        }
+    }
+
+    fun loadMachines() {
+        viewModelScope.launch {
+            SupabaseRepository.getMachines()
+                .onSuccess { list ->
+                    _state.value = _state.value.copy(machines = list)
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(error = "Không tải được danh sách máy")
+                }
         }
     }
 
@@ -73,7 +90,10 @@ class UserViewModel @Inject constructor(
         _state.value = _state.value.copy(message = null, error = null)
     }
 
-    fun refresh() = loadData()
+    fun refresh() {
+        loadData()
+        loadMachines()
+    }
 
     fun signOut(onDone: () -> Unit) {
         FirebaseAuth.getInstance().signOut()
